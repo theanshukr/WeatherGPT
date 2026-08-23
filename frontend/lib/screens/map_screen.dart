@@ -33,9 +33,10 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadData() async {
     try {
       final loc = await _locationService.getCurrentLocation();
-      final alerts = await _alertService.getActiveAlerts(
+      final alerts = await _alertService.getAllAlerts(
         latitude: loc.latitude,
         longitude: loc.longitude,
+        country: 'India',
       );
 
       if (mounted) {
@@ -66,17 +67,17 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. Interactive GIS Map
+          // 1. Interactive GIS Map with Tile Layers
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _userLocation,
               initialZoom: 7.0,
-              minZoom: 4.0,
+              minZoom: 3.0,
               maxZoom: 18.0,
             ),
             children: [
-              // OpenStreetMap CartoDB / Standard Tile Layer
+              // Basemap: Dark CartoDB / Light CartoDB
               TileLayer(
                 urlTemplate: isDark
                     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -85,9 +86,17 @@ class _MapScreenState extends State<MapScreen> {
                 userAgentPackageName: 'com.weathergpt.app',
               ),
 
+              // Weather Radar / Precipitation Tile Layer overlay when selected
+              if (_selectedLayer == 'Precipitation' || _selectedLayer == 'Alerts & Radar')
+                TileLayer(
+                  urlTemplate: 'https://tile.rainviewer.com/v2/radar/nowcast_latest/256/{z}/{x}/{y}/2/1_1.png',
+                  userAgentPackageName: 'com.weathergpt.app',
+                  tileProvider: NetworkTileProvider(),
+                ),
+
               // Severe Weather Alert Circles / Radiation Area
               CircleLayer(
-                circles: _alerts.map((alert) {
+                circles: _alerts.where((a) => a.latitude != 0.0 && a.longitude != 0.0).map((alert) {
                   final isEmergency = alert.severity == AlertSeverity.emergency;
                   final color = isEmergency
                       ? AppColors.alertCrimson
@@ -116,9 +125,9 @@ class _MapScreenState extends State<MapScreen> {
                     child: GestureDetector(
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('📍 Current GPS Location (New Delhi)'),
-                            duration: Duration(seconds: 2),
+                          SnackBar(
+                            content: Text('📍 Current Location (${_userLocation.latitude.toStringAsFixed(2)}, ${_userLocation.longitude.toStringAsFixed(2)})'),
+                            duration: const Duration(seconds: 2),
                           ),
                         );
                       },
@@ -154,7 +163,7 @@ class _MapScreenState extends State<MapScreen> {
                   ),
 
                   // Alert Hazard Markers
-                  ..._alerts.map((alert) {
+                  ..._alerts.where((a) => a.latitude != 0.0 && a.longitude != 0.0).map((alert) {
                     final isEmergency = alert.severity == AlertSeverity.emergency;
                     final markerColor = isEmergency
                         ? AppColors.alertCrimson
@@ -388,35 +397,39 @@ class _MapScreenState extends State<MapScreen> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _selectedAlert!.description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                        height: 1.4,
+                    if (_selectedAlert!.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _selectedAlert!.description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                          height: 1.4,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkGlassFill : AppColors.lightSurfaceElevated,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.shield_outlined, size: 16, color: AppColors.emeraldNeon),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _selectedAlert!.instructions,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    ],
+                    if (_selectedAlert!.instructions.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkGlassFill : AppColors.lightSurfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.shield_outlined, size: 16, color: AppColors.emeraldNeon),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _selectedAlert!.instructions,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),

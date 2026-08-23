@@ -122,8 +122,8 @@ class PersonaEngine:
         else:
             # Check current turn signals immediately
             if new_signals:
-                recent_top = max(new_signals, key=lambda s: s.confidence)
-                if recent_top.confidence >= 0.50:
+                recent_top = max(new_signals, key=lambda s: s.weight)
+                if recent_top.weight >= 0.20:
                     active_p = recent_top.persona
             
             # If still general, check cumulative rolling scores

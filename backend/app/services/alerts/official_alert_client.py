@@ -1,30 +1,17 @@
 """
-Official Alert Source Client — NDMA SACHET CAP feed.
+Official Alert Source Client — GDACS Global Disaster & Extreme Weather Feed + NDMA SACHET CAP.
 
-IMPORTANT / HONEST STATUS:
-NDMA's SACHET portal exposes a CAP (Common Alerting Protocol) XML feed at:
-    GET https://sachet.ndma.gov.in/cap_public_website/FetchXMLFile?identifier=<AGENCY_ID>
-using ETag-based caching (see their published Integration Guide for
-Agencies). HOWEVER, the `identifier` parameter is agency-specific and is
-NOT published anywhere publicly — it appears to require registering as a
-"consuming agency" with NDMA/C-DOT to obtain one. As of writing, no public,
-self-serve identifier could be found.
+Sources:
+1. GDACS (Global Disaster Alert and Coordination System - UN OCHA / European Commission):
+   - Fully open, live real-time XML/RSS feed for severe weather, tropical cyclones, floods,
+     droughts, and earthquakes worldwide including India & South Asia.
+   - Provides official multi-agency early warnings and impact assessments.
+2. NDMA SACHET CAP Feed (India National Disaster Management Authority):
+   - Official CAP 1.2 XML feed from C-DOT/NDMA. Activated whenever `OFFICIAL_ALERT_IDENTIFIER`
+     is configured.
 
-Rather than fake this integration (e.g. by silently falling back to the
-locally-computed thresholds and calling them "IMD alerts"), this client is
-built against the REAL documented protocol and ships DISABLED until a real
-identifier is configured (OFFICIAL_ALERT_IDENTIFIER in .env). This means:
-
-  - If you obtain an identifier (by contacting NDMA/C-DOT, or if a public
-    one surfaces later), set OFFICIAL_ALERT_IDENTIFIER and this starts
-    working with no other code changes.
-  - Until then, `fetch_official_alerts()` returns an empty list and logs
-    once that the official source is not configured — the system falls
-    back to (clearly-labeled) computed threshold alerts only, which is the
-    honest current state of this feature.
-
-This keeps the architecture ready for the real integration without
-pretending it's already connected.
+Both sources are normalized into `OfficialAlert` structures and merged seamlessly into
+the alerting engine and WebSocket push poller.
 """
 
 import logging
@@ -37,82 +24,166 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 CAP_NS = {"cap": "urn:oasis:names:tc:emergency:cap:1.2"}
+GDACS_NS = {
+    "gdacs": "http://www.gdacs.org",
+    "geo": "http://www.w3.org/2003/01/geo/wgs84_pos#",
+    "dc": "http://purl.org/dc/elements/1.1/",
+}
 
 
 class OfficialAlert(BaseModel):
     identifier: str
-    sender: str  # e.g. "IMD", "CWC", "GSI" via NDMA SACHET
+    sender: str  # e.g. "GDACS / UN OCHA", "IMD / NDMA"
+    event_type: Optional[str] = None  # e.g. "Tropical Cyclone", "Flood", "Severe Weather"
     headline: str
     description: str
-    severity: str  # CAP: Minor, Moderate, Severe, Extreme
-    urgency: str  # CAP: Immediate, Expected, Future, Past
+    severity: str  # "Severe", "Extreme", "Moderate", "Minor"
+    urgency: str  # "Immediate", "Expected", "Future"
     area_description: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     effective: Optional[str] = None
     expires: Optional[str] = None
-    source: str = "ndma_sachet_cap"
+    source: str = "gdacs_live"
 
 
 class OfficialAlertClient:
-    """Fetches and parses NDMA SACHET's CAP XML feed, with the ETag caching
-    their integration guide requires. No-ops safely if not configured."""
+    """Fetches and normalizes official government and intergovernmental early warnings."""
 
-    BASE_URL = "https://sachet.ndma.gov.in/cap_public_website/FetchXMLFile"
+    GDACS_FEED_URL = "https://www.gdacs.org/xml/rss.xml"
+    NDMA_BASE_URL = "https://sachet.ndma.gov.in/cap_public_website/FetchXMLFile"
 
     def __init__(self):
-        self.identifier = getattr(settings, "OFFICIAL_ALERT_IDENTIFIER", None)
-        self._etag: Optional[str] = None
-        self._cached_alerts: List[OfficialAlert] = []
-        self._warned_not_configured = False
+        self.ndma_identifier = getattr(settings, "OFFICIAL_ALERT_IDENTIFIER", None)
+        self._ndma_etag: Optional[str] = None
+        self._cached_ndma_alerts: List[OfficialAlert] = []
+        self._cached_gdacs_alerts: List[OfficialAlert] = []
 
     def is_configured(self) -> bool:
-        return bool(self.identifier)
+        """GDACS is fully open and active out-of-the-box."""
+        return True
 
-    async def fetch_official_alerts(self) -> List[OfficialAlert]:
-        """Returns official government alerts, or an empty list if the
-        feed isn't configured / unreachable. Never raises — a failure here
-        should never take down the rest of the alert pipeline."""
-        if not self.is_configured():
-            if not self._warned_not_configured:
-                logger.warning(
-                    "OFFICIAL_ALERT_IDENTIFIER not set — no NDMA/IMD official "
-                    "alert source is connected. Falling back to computed "
-                    "forecast-threshold alerts only. See "
-                    "official_alert_client.py for how to enable this."
-                )
-                self._warned_not_configured = True
+    def is_ndma_configured(self) -> bool:
+        return bool(self.ndma_identifier)
+
+    async def fetch_gdacs_alerts(self, country: Optional[str] = None) -> List[OfficialAlert]:
+        """Fetch live alerts from GDACS (UN OCHA / EC Joint Research Centre)."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(self.GDACS_FEED_URL)
+                if resp.status_code != 200:
+                    logger.warning(f"GDACS RSS feed returned status {resp.status_code}")
+                    return self._cached_gdacs_alerts
+
+                alerts: List[OfficialAlert] = []
+                root = ET.fromstring(resp.content)
+                items = root.findall(".//item")
+
+                for item in items:
+                    try:
+                        title = item.find("title").text if item.find("title") is not None else "Disaster Alert"
+                        link = item.find("link").text if item.find("link") is not None else ""
+                        desc = item.find("description").text if item.find("description") is not None else ""
+                        pub_date = item.find("pubDate").text if item.find("pubDate") is not None else None
+
+                        # Parse GDACS custom tags if available
+                        event_type_tag = item.find("{http://www.gdacs.org}eventtype")
+                        alert_level_tag = item.find("{http://www.gdacs.org}alertlevel")
+                        country_tag = item.find("{http://www.gdacs.org}country")
+                        event_id_tag = item.find("{http://www.gdacs.org}eventid")
+
+                        lat_tag = item.find("{http://www.w3.org/2003/01/geo/wgs84_pos#}lat")
+                        lon_tag = item.find("{http://www.w3.org/2003/01/geo/wgs84_pos#}long")
+
+                        event_type_code = event_type_tag.text if event_type_tag is not None else "Weather"
+                        alert_level = alert_level_tag.text if alert_level_tag is not None else "Green"
+                        event_country = country_tag.text if country_tag is not None else "Global"
+                        event_id = event_id_tag.text if event_id_tag is not None else link
+
+                        # Filter by country if requested
+                        if country and country.lower() not in (event_country or "").lower() and country.lower() not in title.lower():
+                            continue
+
+                        # Map GDACS alert levels (Red, Orange, Green) to CAP severity
+                        if alert_level.lower() == "red":
+                            severity = "Extreme"
+                        elif alert_level.lower() == "orange":
+                            severity = "Severe"
+                        else:
+                            severity = "Moderate"
+
+                        event_type_names = {
+                            "TC": "Tropical Cyclone",
+                            "FL": "Flood",
+                            "DR": "Drought",
+                            "EQ": "Earthquake",
+                            "VO": "Volcano",
+                            "WF": "Wildfire",
+                        }
+                        event_name = event_type_names.get(event_type_code, event_type_code)
+
+                        lat_val = float(lat_tag.text) if lat_tag is not None and lat_tag.text else None
+                        lon_val = float(lon_tag.text) if lon_tag is not None and lon_tag.text else None
+
+                        alerts.append(
+                            OfficialAlert(
+                                identifier=f"GDACS-{event_id}",
+                                sender="GDACS (UN OCHA / EC JRC)",
+                                event_type=event_name,
+                                headline=title,
+                                description=desc or title,
+                                severity=severity,
+                                urgency="Immediate" if severity in ("Extreme", "Severe") else "Expected",
+                                area_description=event_country or "Global",
+                                latitude=lat_val,
+                                longitude=lon_val,
+                                effective=pub_date,
+                                source="gdacs_official",
+                            )
+                        )
+                    except Exception as item_err:
+                        logger.debug(f"Error parsing GDACS item: {item_err}")
+                        continue
+
+                self._cached_gdacs_alerts = alerts
+                return alerts
+
+        except Exception as e:
+            logger.error(f"GDACS RSS fetch failed: {e}")
+            return self._cached_gdacs_alerts
+
+    async def fetch_ndma_alerts(self) -> List[OfficialAlert]:
+        """Fetch NDMA SACHET CAP feed if configured with agency identifier."""
+        if not self.is_ndma_configured():
             return []
 
         headers = {}
-        if self._etag:
-            headers["If-None-Match"] = self._etag
+        if self._ndma_etag:
+            headers["If-None-Match"] = self._ndma_etag
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(
-                    self.BASE_URL,
-                    params={"identifier": self.identifier},
+                    self.NDMA_BASE_URL,
+                    params={"identifier": self.ndma_identifier},
                     headers=headers,
                 )
                 if resp.status_code == 304:
-                    # Unchanged — use cache, per NDMA's required behaviour.
-                    return self._cached_alerts
+                    return self._cached_ndma_alerts
 
                 if resp.status_code != 200:
                     logger.error(f"NDMA CAP feed returned {resp.status_code}")
-                    return self._cached_alerts
+                    return self._cached_ndma_alerts
 
-                self._etag = resp.headers.get("ETag", self._etag)
-                self._cached_alerts = self._parse_cap_xml(resp.text)
-                return self._cached_alerts
+                self._ndma_etag = resp.headers.get("ETag", self._ndma_etag)
+                self._cached_ndma_alerts = self._parse_ndma_cap_xml(resp.text)
+                return self._cached_ndma_alerts
 
         except Exception as e:
             logger.error(f"NDMA CAP feed fetch failed: {e}")
-            return self._cached_alerts  # serve stale cache rather than nothing
+            return self._cached_ndma_alerts
 
-    def _parse_cap_xml(self, xml_text: str) -> List[OfficialAlert]:
-        """Parse CAP 1.2 XML into OfficialAlert objects. Tolerant of
-        multiple <alert> or <info> blocks; skips anything malformed rather
-        than failing the whole batch."""
+    def _parse_ndma_cap_xml(self, xml_text: str) -> List[OfficialAlert]:
         alerts: List[OfficialAlert] = []
         try:
             root = ET.fromstring(xml_text)
@@ -120,32 +191,53 @@ class OfficialAlertClient:
 
             for alert_el in alert_elements:
                 identifier = self._text(alert_el, "cap:identifier") or "unknown"
-                sender = self._text(alert_el, "cap:sender") or "NDMA"
+                sender = self._text(alert_el, "cap:sender") or "NDMA / IMD"
 
                 for info_el in alert_el.findall("cap:info", CAP_NS):
                     try:
                         area_el = info_el.find("cap:area", CAP_NS)
                         area_desc = self._text(area_el, "cap:areaDesc") if area_el is not None else "India"
 
-                        alerts.append(OfficialAlert(
-                            identifier=identifier,
-                            sender=sender,
-                            headline=self._text(info_el, "cap:headline") or "Weather Alert",
-                            description=self._text(info_el, "cap:description") or "",
-                            severity=self._text(info_el, "cap:severity") or "Moderate",
-                            urgency=self._text(info_el, "cap:urgency") or "Expected",
-                            area_description=area_desc or "India",
-                            effective=self._text(info_el, "cap:effective"),
-                            expires=self._text(info_el, "cap:expires"),
-                        ))
+                        alerts.append(
+                            OfficialAlert(
+                                identifier=identifier,
+                                sender=sender,
+                                event_type=self._text(info_el, "cap:event"),
+                                headline=self._text(info_el, "cap:headline") or "Severe Weather Alert",
+                                description=self._text(info_el, "cap:description") or "",
+                                severity=self._text(info_el, "cap:severity") or "Moderate",
+                                urgency=self._text(info_el, "cap:urgency") or "Expected",
+                                area_description=area_desc or "India",
+                                effective=self._text(info_el, "cap:effective"),
+                                expires=self._text(info_el, "cap:expires"),
+                                source="ndma_sachet_cap",
+                            )
+                        )
                     except Exception as e:
                         logger.debug(f"Skipping malformed CAP <info> block: {e}")
                         continue
-
         except ET.ParseError as e:
             logger.error(f"Failed to parse CAP XML: {e}")
 
         return alerts
+
+    async def fetch_official_alerts(self, country: Optional[str] = None) -> List[OfficialAlert]:
+        """Fetch and aggregate official alerts from all configured live sources."""
+        import asyncio
+
+        gdacs_res, ndma_res = await asyncio.gather(
+            self.fetch_gdacs_alerts(country=country),
+            self.fetch_ndma_alerts(),
+            return_exceptions=True,
+        )
+
+        all_alerts: List[OfficialAlert] = []
+        if isinstance(gdacs_res, list):
+            all_alerts.extend(gdacs_res)
+        if isinstance(ndma_res, list):
+            all_alerts.extend(ndma_res)
+
+        return all_alerts
 
     @staticmethod
     def _text(el, path: str) -> Optional[str]:

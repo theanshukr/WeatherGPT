@@ -27,14 +27,14 @@ class UserContext {
 
   factory UserContext.fromJson(Map<String, dynamic> json) {
     return UserContext(
-      userId: json['user_id'] as String? ?? 'user_1',
-      userName: json['user_name'] as String? ?? 'Sarah Logan',
+      userId: json['user_id'] as String? ?? 'guest',
+      userName: json['user_name'] as String? ?? 'Guest User',
       primaryPersona: _parsePersona(json['primary_persona'] as String?),
-      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.85,
+      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
       detectedInterests: (json['detected_interests'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
-          ['🌾 Agriculture', '✈️ Travel', '🌧️ Rain & Storm Alerts'],
+          [],
       activeContextData: json['active_context_data'] as Map<String, dynamic>? ?? {},
       lastUpdated: DateTime.tryParse(json['last_updated'] as String? ?? '') ?? DateTime.now(),
     );
@@ -55,24 +55,16 @@ class UserContext {
     }
   }
 
+  /// Honest default — no fake names, no fake interests
   static UserContext defaultContext() {
     return UserContext(
-      userId: 'user_dev',
-      userName: 'Sarah Logan',
-      primaryPersona: DetectedPersona.farmer,
-      confidenceScore: 0.88,
-      detectedInterests: const [
-        '🌾 Agriculture & Sowing',
-        '✈️ Travel Advisories',
-        '🌧️ Severe Rain & Storm Alerts',
-        '💧 Irrigation Optimization',
-      ],
-      activeContextData: const {
-        'crop': 'Wheat',
-        'irrigation_window': 'Morning preferred',
-        'upcoming_trip': 'Manali (Sep 01 - Sep 05)',
-      },
-      lastUpdated: DateTime.now().subtract(const Duration(hours: 3)),
+      userId: 'guest',
+      userName: 'Guest User',
+      primaryPersona: DetectedPersona.general,
+      confidenceScore: 0.0,
+      detectedInterests: const [],
+      activeContextData: const {},
+      lastUpdated: DateTime.now(),
     );
   }
 }

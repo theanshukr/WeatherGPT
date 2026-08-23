@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../core/theme/app_colors.dart';
 import '../models/weather_model.dart';
 import '../providers/weather_provider.dart';
@@ -25,12 +27,40 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _liveQueryText;
   String? _liveResponseText;
 
+  // Real speech recognition
+  final stt.SpeechToText _speechToText = stt.SpeechToText();
+  bool _speechAvailable = false;
+  String _recognizedWords = '';
+
   @override
   void initState() {
     super.initState();
+    _initSpeech();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkWeatherStatus();
     });
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      _speechAvailable = await _speechToText.initialize(
+        onError: (error) {
+          if (mounted) {
+            setState(() {
+              _orbState = VoiceOrbState.idle;
+              _liveQueryText = 'Speech error: ${error.errorMsg}';
+            });
+          }
+        },
+        onStatus: (status) {
+          if (status == 'done' && mounted && _orbState == VoiceOrbState.listening) {
+            _processRecognizedSpeech();
+          }
+        },
+      );
+    } catch (_) {
+      _speechAvailable = false;
+    }
   }
 
   void _checkWeatherStatus() {
@@ -44,13 +74,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Live Voice Agent Trigger (Stays directly on HomeScreen)
   Future<void> _handleLiveVoiceTap() async {
-    final chatProv = context.read<ChatProvider>();
     final voiceProv = context.read<VoiceProvider>();
 
     if (_orbState == VoiceOrbState.speaking) {
-      // Stop ongoing speech
       await voiceProv.stop();
       setState(() {
         _orbState = VoiceOrbState.idle;
@@ -59,41 +86,87 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_orbState == VoiceOrbState.listening) {
+      await _speechToText.stop();
       setState(() => _orbState = VoiceOrbState.idle);
       return;
     }
 
-    // 1. Listening State
+    if (!_speechAvailable) {
+      setState(() {
+        _liveQueryText = 'Voice input not available on this device. Tap "Type Query" to chat.';
+        _liveResponseText = null;
+      });
+      return;
+    }
+
     setState(() {
       _orbState = VoiceOrbState.listening;
-      _liveQueryText = 'बोलिए, मैं सुन रही हूँ... (Listening...)';
+      _liveQueryText = '🎙️ Listening... speak now';
       _liveResponseText = null;
+      _recognizedWords = '';
     });
 
-    // 2. Query processing (simulated speech capture or trigger)
-    await Future.delayed(const Duration(milliseconds: 2200));
-    if (!mounted || _orbState != VoiceOrbState.listening) return;
-
-    final query = 'आज शाम को मेरे एरिया में मौसम कैसा रहेगा और क्या बारिश होगी?';
-    setState(() {
-      _liveQueryText = query;
-      _orbState = VoiceOrbState.thinking;
-    });
-
-    // 3. Send to Live AI Backend
     try {
-      await chatProv.sendUserMessage(query);
+      await _speechToText.listen(
+        onResult: (result) {
+          if (mounted) {
+            setState(() {
+              _recognizedWords = result.recognizedWords;
+              _liveQueryText = _recognizedWords.isEmpty
+                  ? '🎙️ Listening... speak now'
+                  : _recognizedWords;
+            });
+
+            if (result.finalResult && _recognizedWords.isNotEmpty) {
+              _processRecognizedSpeech();
+            }
+          }
+        },
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.dictation,
+          cancelOnError: true,
+          partialResults: true,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _orbState = VoiceOrbState.idle;
+          _liveQueryText = 'Could not start voice input: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _processRecognizedSpeech() async {
+    if (_recognizedWords.trim().isEmpty) {
+      setState(() {
+        _orbState = VoiceOrbState.idle;
+        _liveQueryText = 'No speech detected. Tap the orb and try again.';
+      });
+      return;
+    }
+
+    final chatProv = context.read<ChatProvider>();
+    final voiceProv = context.read<VoiceProvider>();
+
+    setState(() {
+      _orbState = VoiceOrbState.thinking;
+      _liveQueryText = _recognizedWords;
+    });
+
+    try {
+      await chatProv.sendUserMessage(_recognizedWords);
       if (!mounted) return;
 
       final lastMessage = chatProv.messages.isNotEmpty ? chatProv.messages.last : null;
-      final replyText = lastMessage?.content ?? 'मौसम सामान्य रहेगा।';
+      final replyText = lastMessage?.content ?? 'No response received.';
 
       setState(() {
         _liveResponseText = replyText;
         _orbState = VoiceOrbState.speaking;
       });
 
-      // 4. Speak aloud using VoiceProvider
       await voiceProv.speakMessage('home_live_reply', replyText);
       if (mounted) {
         setState(() {
@@ -104,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _orbState = VoiceOrbState.idle;
-          _liveResponseText = 'बैकएंड से कनेक्ट नहीं हो सका। कृपया सर्वर चेक करें।';
+          _liveResponseText = 'Could not connect to AI server. Please check your connection.';
         });
         ConnectionErrorDialog.show(
           context,
@@ -115,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Open Full Text Chat Screen only on explicit button tap
   void _openTextChat() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ChatScreen()),
@@ -139,16 +211,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 top: -60,
                 left: MediaQuery.of(context).size.width * 0.2,
                 child: Container(
-                  width: 280,
-                  height: 280,
+                  width: 300,
+                  height: 300,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.emeraldNeon.withValues(alpha: 0.1),
+                    color: AppColors.emeraldNeon.withValues(alpha: 0.12),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.emeraldNeon.withValues(alpha: 0.15),
-                        blurRadius: 130,
-                        spreadRadius: 45,
+                        color: AppColors.emeraldNeon.withValues(alpha: 0.18),
+                        blurRadius: 140,
+                        spreadRadius: 50,
                       ),
                     ],
                   ),
@@ -157,6 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Main Scrollable Content
             RefreshIndicator(
+              color: AppColors.emeraldNeon,
               onRefresh: () async {
                 await weatherProv.loadWeatherData();
                 _checkWeatherStatus();
@@ -181,17 +254,20 @@ class _HomeScreenState extends State<HomeScreen> {
                             // GIS Radar Map Button
                             IconButton(
                               icon: Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(9),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
                                   border: Border.all(
                                     color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                                   ),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                                  ],
                                 ),
                                 child: Icon(
                                   Icons.public_rounded,
-                                  size: 18,
+                                  size: 19,
                                   color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
                                 ),
                               ),
@@ -203,21 +279,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 6),
                             // Severe Weather Alert Bell
                             IconButton(
                               icon: Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(9),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
                                   border: Border.all(
                                     color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                                   ),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                                  ],
                                 ),
                                 child: const Icon(
                                   Icons.notifications_active_outlined,
-                                  size: 18,
+                                  size: 19,
                                   color: AppColors.sunnyGold,
                                 ),
                               ),
@@ -255,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               : _orbState == VoiceOrbState.speaking
                                   ? '🔊 Megha is speaking... (Tap orb to stop)'
                                   : 'Tap Orb to talk with Megha (AI Voice)',
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: _orbState != VoiceOrbState.idle
@@ -271,13 +350,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 14),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,15 +376,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Expanded(
                                     child: Text(
                                       _liveQueryText!,
-                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                      style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
                                     ),
                                   ),
                                 ],
                               ),
                             if (_liveResponseText != null) ...[
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               const Divider(height: 1),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -306,9 +392,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Expanded(
                                     child: Text(
                                       _liveResponseText!,
-                                      style: TextStyle(
+                                      style: GoogleFonts.inter(
                                         fontSize: 13,
-                                        height: 1.4,
+                                        height: 1.45,
                                         color: isDark ? AppColors.emeraldGlow : AppColors.emeraldDark,
                                       ),
                                     ),
@@ -323,8 +409,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 20),
 
-                    // Live Weather Overview Card (Real Data from Open-Meteo)
-                    _buildLiveWeatherCard(context, weather: weather, isDark: isDark),
+                    // Live Weather Overview Card (Real Data from Backend)
+                    _buildLiveWeatherCard(context, weatherProv: weatherProv, weather: weather, isDark: isDark),
 
                     const SizedBox(height: 16),
 
@@ -338,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Floating Keyboard Button (Opens Text Chat only when tapped)
+            // Floating Keyboard Button
             Positioned(
               bottom: 20,
               right: 20,
@@ -346,10 +432,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 heroTag: 'fab_chat',
                 onPressed: _openTextChat,
                 backgroundColor: AppColors.emeraldNeon,
+                elevation: 4,
                 icon: const Icon(Icons.keyboard_outlined, color: Colors.black, size: 20),
-                label: const Text(
+                label: Text(
                   'Type Query',
-                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 13),
+                  style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w800, fontSize: 13),
                 ),
               ),
             ),
@@ -359,72 +446,165 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLiveWeatherCard(BuildContext context, {required WeatherData weather, required bool isDark}) {
+  Widget _buildLiveWeatherCard(BuildContext context, {required WeatherProvider weatherProv, required WeatherData weather, required bool isDark}) {
+    if (weatherProv.isLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(AppColors.emeraldNeon),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              'Connecting to atmospheric telemetry...',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (weatherProv.errorMessage != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppColors.alertCrimson.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 34, color: AppColors.alertCrimson),
+            const SizedBox(height: 8),
+            Text(
+              'Could not reach weather server',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Check your connection and verify the backend is running.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () => weatherProv.loadWeatherData(),
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(
           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black38 : Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: isDark ? Colors.black45 : Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Location & Condition Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_rounded, size: 16, color: AppColors.emeraldNeon),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${weather.location.name}, ${weather.location.country}',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    weather.conditionDescription,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_rounded, size: 17, color: AppColors.emeraldNeon),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            weather.location.name,
+                            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      weather.conditionDescription,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Text(
                 '${weather.temperature.toStringAsFixed(1)}°C',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 32, letterSpacing: -1),
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 34,
+                  letterSpacing: -1,
+                ),
               ),
             ],
           ),
 
           const SizedBox(height: 16),
           const Divider(height: 1),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // 4 Grid Stats: Rain, Humidity, Wind, UV Index
+          // 4 Grid Stats: Rain, Humidity, Wind, Condition
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem('Rain Prob', '${weather.rainProbability.toStringAsFixed(0)}%', Icons.water_drop_outlined, isDark),
+              _buildStatItem(
+                'Precip',
+                '${weather.rainfallAmount.toStringAsFixed(1)} mm',
+                Icons.water_drop_outlined,
+                isDark,
+              ),
               _buildStatItem('Humidity', '${weather.humidity.toStringAsFixed(0)}%', Icons.opacity_rounded, isDark),
               _buildStatItem('Wind', '${weather.windSpeed.toStringAsFixed(1)} km/h', Icons.air_rounded, isDark),
-              _buildStatItem('UV Index', weather.uvIndex.toStringAsFixed(1), Icons.wb_sunny_outlined, isDark),
+              _buildStatItem(
+                'Wind Dir',
+                '${weather.windDirection.toInt()}°',
+                Icons.explore_outlined,
+                isDark,
+              ),
             ],
           ),
         ],
@@ -435,11 +615,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildStatItem(String label, String value, IconData icon, bool isDark) {
     return Column(
       children: [
-        Icon(icon, size: 18, color: AppColors.emeraldNeon),
-        const SizedBox(height: 4),
+        Icon(icon, size: 19, color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark),
+        const SizedBox(height: 5),
         Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
         ),
         Text(
           label,
@@ -453,37 +633,53 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHourlyForecastStrip(BuildContext context, {required WeatherData weather, required bool isDark}) {
-    return Container(
-      height: 96,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: weather.hourlyForecast.length.clamp(0, 12),
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (ctx, i) {
-          final item = weather.hourlyForecast[i];
-          final hourStr = '${item.time.hour.toString().padLeft(2, '0')}:00';
-          return Container(
-            width: 68,
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'HOURLY RAIN & TEMPERATURE TIMELINE',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Text(hourStr, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text('${item.temperature.toStringAsFixed(0)}°', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                Text('${item.rainProbability.toStringAsFixed(0)}% 🌧️', style: TextStyle(fontSize: 9, color: isDark ? AppColors.emeraldGlow : AppColors.emeraldDark)),
-              ],
-            ),
-          );
-        },
-      ),
+          ),
+        ),
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: weather.hourlyForecast.length.clamp(0, 16),
+            separatorBuilder: (context, index) => const SizedBox(width: 8),
+            itemBuilder: (ctx, i) {
+              final item = weather.hourlyForecast[i];
+              final hourStr = '${item.time.hour.toString().padLeft(2, '0')}:00';
+              return Container(
+                width: 72,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Text(hourStr, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600)),
+                    Text('${item.temperature.toStringAsFixed(0)}°', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w800)),
+                    Text('${item.rainProbability.toStringAsFixed(0)}% 🌧️', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isDark ? AppColors.emeraldGlow : AppColors.emeraldDark)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

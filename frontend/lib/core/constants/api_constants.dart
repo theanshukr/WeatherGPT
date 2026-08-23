@@ -28,6 +28,12 @@ class ApiConstants {
   static const String currentWeather = '/weather/current';
   static const String weatherForecast = '/weather/forecast';
   static const String weatherAlerts = '/weather/alerts';
+  static const String weatherSnapshot = '/weather/snapshot';
+  static const String weatherHourly = '/weather/hourly';
+  static const String officialAlerts = '/weather/official-alerts';
+  static const String alertSourceStatus = '/weather/alerts/source-status';
+  static const String nwpComparison = '/weather/nwp';
+  static const String climateTrend = '/weather/climate-trend';
 
   // AI & Conversational Chat Endpoints
   static const String chat = '/chat';

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import 'auth_screen.dart';
-import 'main_navigation_screen.dart';
-import '../services/supabase_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -43,16 +41,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Future<void> _handleSkipToHome() async {
-    try {
-      await SupabaseService.signInAnonymously();
-    } catch (_) {}
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 0)),
-      );
-    }
+  void _handleSkipToHome() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+    );
   }
 
   @override

@@ -21,10 +21,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
 
   final List<String> _starterPrompts = [
-    '🌾 Is it safe to spray crops today?',
+    '🌾 Is it safe to spray pesticides today?',
     '🌧️ What is the rain timeline for the next 6 hours?',
     '✈️ What should I pack for travel this weekend?',
-    '⚡ Any severe weather warnings active near me?',
+    '⚡ Any severe weather or storm warnings active near me?',
   ];
 
   @override
@@ -77,6 +77,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatProv = context.watch<ChatProvider>();
     final weatherProv = context.watch<WeatherProvider>();
+    final locationName = weatherProv.weatherData.location.name.isNotEmpty &&
+            weatherProv.weatherData.location.name != 'Loading...'
+        ? weatherProv.weatherData.location.name
+        : 'Live Intelligence';
 
     return Scaffold(
       appBar: AppBar(
@@ -99,6 +103,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.emeraldNeon.withValues(alpha: 0.5),
+                        blurRadius: 6,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -112,10 +122,11 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
             Text(
-              '${weatherProv.weatherData.location.name} • Live Intelligence',
+              '$locationName • Gemini 2.0 Flash',
               style: TextStyle(
                 fontSize: 11,
                 color: isDark ? AppColors.emeraldGlow : AppColors.emeraldDark,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -130,6 +141,7 @@ class _ChatScreenState extends State<ChatScreen> {
             tooltip: 'New Conversation',
             onPressed: () => chatProv.clearConversation(),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: SafeArea(
@@ -170,19 +182,17 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       child: Row(
                         children: [
-                          SizedBox(
+                          const SizedBox(
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(
-                                isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                              ),
+                              valueColor: AlwaysStoppedAnimation(AppColors.emeraldNeon),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            'WeatherGPT is analyzing radar & forecasts...',
+                            'WeatherGPT is analyzing telemetry & models...',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -195,9 +205,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-            // ChatGPT Inspired Bottom Pill Input Bar
+            // Bottom Input Bar
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
                 border: Border(
@@ -209,7 +219,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: Row(
                 children: [
-                  // Text Input Pill
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
@@ -238,7 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
 
                   // Send Action Button
                   GestureDetector(
@@ -285,8 +294,8 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 68,
-              height: 68,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
@@ -302,7 +311,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Text(
               'How can I help you with weather today?',
               textAlign: TextAlign.center,
@@ -313,12 +322,12 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ask for agricultural spray forecasts, precipitation radar, packing tips, or atmospheric alerts.',
+              'Ask for agricultural spray windows, precipitation timelines, travel advisories, or atmospheric early warnings.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 13,
                 color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                height: 1.4,
+                height: 1.45,
               ),
             ),
             const SizedBox(height: 24),
@@ -327,12 +336,12 @@ class _ChatScreenState extends State<ChatScreen> {
             Column(
               children: _starterPrompts.map((prompt) {
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: GestureDetector(
                     onTap: () => _handleSendMessage(prompt),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                       decoration: BoxDecoration(
                         color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
                         borderRadius: BorderRadius.circular(16),
@@ -355,7 +364,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           Icon(
                             Icons.arrow_forward_rounded,
                             size: 16,
-                            color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
                           ),
                         ],
                       ),

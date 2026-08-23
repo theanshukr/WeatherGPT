@@ -170,5 +170,38 @@ class ToolRegistry:
             **result,
         }
 
+    async def get_nwp_comparison(
+        self,
+        lat: float,
+        lon: float,
+        location: str,
+    ) -> Dict[str, Any]:
+        """Fetch raw Numerical Weather Prediction (NWP) model runs from NOAA GFS, ECMWF IFS, and DWD ICON, and compute ensemble consensus and spread."""
+        from app.services.weather.nwp_service import nwp_service
+        result = await nwp_service.get_multi_model_comparison(lat, lon, location)
+        if not result:
+            return {
+                "tool": "get_nwp_comparison",
+                "location": location,
+                "error": "Failed to retrieve NWP model intercomparison data.",
+            }
+        return {
+            "tool": "get_nwp_comparison",
+            **result.model_dump(),
+        }
+
+    async def get_official_disaster_alerts(
+        self,
+        country: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch live official disaster and severe weather warnings from GDACS (UN OCHA / EC JRC) and NDMA SACHET."""
+        from app.services.alerts.official_alert_client import official_alert_client
+        alerts = await official_alert_client.fetch_official_alerts(country=country)
+        return {
+            "tool": "get_official_disaster_alerts",
+            "count": len(alerts),
+            "alerts": [a.model_dump() for a in alerts],
+        }
+
 
 tool_registry = ToolRegistry()

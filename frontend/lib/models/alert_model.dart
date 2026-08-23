@@ -16,6 +16,7 @@ class WeatherAlert {
   final double longitude;
   final DateTime startsAt;
   final DateTime expiresAt;
+  final String source; // 'threshold', 'gdacs', 'ndma'
 
   const WeatherAlert({
     required this.id,
@@ -24,25 +25,65 @@ class WeatherAlert {
     required this.instructions,
     required this.severity,
     required this.area,
-    this.latitude = 28.6139,
-    this.longitude = 77.2090,
+    this.latitude = 0.0,
+    this.longitude = 0.0,
     required this.startsAt,
     required this.expiresAt,
+    this.source = 'threshold',
   });
 
-  factory WeatherAlert.fromJson(Map<String, dynamic> json) {
+  /// Parse from backend /weather/alerts threshold alert format
+  /// Backend returns: {active_count, severity_class, triggered: [{type, headline, description, ...}]}
+  factory WeatherAlert.fromThresholdAlert(Map<String, dynamic> json, {int index = 0}) {
     return WeatherAlert(
-      id: json['id'] as String? ?? 'alert_1',
-      title: json['title'] as String? ?? 'Severe Thunderstorm Warning',
-      description: json['description'] as String? ?? 'Heavy convective rainfall with wind gusts.',
-      instructions: json['instructions'] as String? ?? 'Avoid open fields and seek shelter.',
-      severity: _parseSeverity(json['severity'] as String?),
-      area: json['area'] as String? ?? 'National Capital Region',
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 28.6139,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 77.2090,
+      id: 'threshold_$index',
+      title: json['headline'] as String? ?? json['type'] as String? ?? 'Weather Alert',
+      description: json['description'] as String? ?? '',
+      instructions: json['safety_advice'] as String? ?? json['action'] as String? ?? 'Stay safe and monitor conditions.',
+      severity: _parseSeverity(json['severity'] as String? ?? json['level'] as String?),
+      area: json['area'] as String? ?? json['region'] as String? ?? 'Your Area',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       startsAt: DateTime.tryParse(json['starts_at'] as String? ?? '') ?? DateTime.now(),
       expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? '') ??
+          DateTime.now().add(const Duration(hours: 6)),
+      source: 'threshold',
+    );
+  }
+
+  /// Parse from backend /weather/official-alerts (GDACS format)
+  factory WeatherAlert.fromOfficialAlert(Map<String, dynamic> json) {
+    return WeatherAlert(
+      id: json['id'] as String? ?? json['gdacs_id'] as String? ?? 'official_${DateTime.now().millisecondsSinceEpoch}',
+      title: json['title'] as String? ?? json['event_name'] as String? ?? 'Official Alert',
+      description: json['description'] as String? ?? '',
+      instructions: json['instructions'] as String? ?? json['safety_advice'] as String? ?? 'Follow official guidance.',
+      severity: _parseSeverity(json['severity'] as String? ?? json['alert_level'] as String?),
+      area: json['area'] as String? ?? json['country'] as String? ?? json['affected_area'] as String? ?? 'Region',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? (json['lat'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? (json['lon'] as num?)?.toDouble() ?? 0.0,
+      startsAt: DateTime.tryParse(json['starts_at'] as String? ?? json['from_date'] as String? ?? '') ?? DateTime.now(),
+      expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? json['to_date'] as String? ?? '') ??
+          DateTime.now().add(const Duration(hours: 24)),
+      source: json['source'] as String? ?? 'gdacs',
+    );
+  }
+
+  /// Generic fromJson fallback — tries both formats
+  factory WeatherAlert.fromJson(Map<String, dynamic> json) {
+    return WeatherAlert(
+      id: json['id'] as String? ?? 'alert_${DateTime.now().millisecondsSinceEpoch}',
+      title: json['title'] as String? ?? json['headline'] as String? ?? json['event_name'] as String? ?? 'Alert',
+      description: json['description'] as String? ?? '',
+      instructions: json['instructions'] as String? ?? json['safety_advice'] as String? ?? 'Stay informed.',
+      severity: _parseSeverity(json['severity'] as String? ?? json['alert_level'] as String?),
+      area: json['area'] as String? ?? json['affected_area'] as String? ?? json['country'] as String? ?? 'Area',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? (json['lat'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? (json['lon'] as num?)?.toDouble() ?? 0.0,
+      startsAt: DateTime.tryParse(json['starts_at'] as String? ?? json['from_date'] as String? ?? '') ?? DateTime.now(),
+      expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? json['to_date'] as String? ?? '') ??
           DateTime.now().add(const Duration(hours: 4)),
+      source: json['source'] as String? ?? 'unknown',
     );
   }
 
@@ -50,10 +91,14 @@ class WeatherAlert {
     switch (severity?.toLowerCase()) {
       case 'emergency':
       case 'severe':
+      case 'extreme':
+      case 'red':
         return AlertSeverity.emergency;
       case 'warning':
+      case 'orange':
         return AlertSeverity.warning;
       case 'watch':
+      case 'yellow':
         return AlertSeverity.watch;
       default:
         return AlertSeverity.advisory;

@@ -56,7 +56,7 @@ RESPONSE_SCHEMA = {
             "items": {"type": "string"},
         },
         "location": {
-            "type": ["string", "null"],
+            "type": "string",
             "description": "The city/place the user is asking about, in English. "
             "Null if no location was mentioned or implied AND none can be "
             "inherited from prior conversation context.",
@@ -70,17 +70,17 @@ RESPONSE_SCHEMA = {
             ],
         },
         "activity": {
-            "type": ["string", "null"],
+            "type": "string",
             "enum": [
                 "driving", "biking", "travel", "spraying", "irrigation",
-                "harvesting", "outdoor", None,
+                "harvesting", "outdoor",
             ],
         },
         "crop": {
-            "type": ["string", "null"],
+            "type": "string",
             "enum": [
                 "wheat", "rice", "mustard", "cotton", "sugarcane",
-                "potato", "maize", "vegetables", None,
+                "potato", "maize", "vegetables",
             ],
         },
         "metrics_requested": {
@@ -92,26 +92,18 @@ RESPONSE_SCHEMA = {
         },
         "language_hint": {
             "type": "string",
-            "description": "BCP-47-ish short code for the language/script the "
-            "user wrote in: en, hi, bn, ta, te, gu, kn, pa, ml, mr, od. "
-            "Use 'hi' for Hinglish (romanized Hindi) too.",
+            "description": "BCP-47 short code for the language/script: en, hi, bn, ta, te, gu, kn, pa, ml, mr, od.",
         },
         "target_month": {
-            "type": ["integer", "null"],
-            "description": "1-12 for the calendar month the user is asking "
-            "about historically (e.g. 'average rainfall in Delhi in August' "
-            "-> 8). Only set this when primary_intent is CLIMATE_TREND. "
-            "Null otherwise.",
+            "type": "integer",
+            "description": "1-12 for the calendar month for historical climate trend.",
         },
         "years_back": {
-            "type": ["integer", "null"],
-            "description": "How many past years of history to average, if "
-            "the user specified a number (e.g. 'last 5 years' -> 5). Only "
-            "relevant for CLIMATE_TREND. Null if unspecified (a default "
-            "of 10 will be used).",
+            "type": "integer",
+            "description": "Number of years back for climate trend, if specified (e.g. 10).",
         },
     },
-    "required": ["primary_intent", "time_range", "language_hint"],
+    "required": ["primary_intent", "language_hint"],
 }
 
 SYSTEM_PROMPT = """You are the query-understanding module for WeatherGPT, an \

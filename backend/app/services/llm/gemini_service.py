@@ -1,10 +1,11 @@
 import logging
 import uuid
+import re
 import json
 import asyncio
 from datetime import date
-from fastapi import HTTPException
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+
 from app.services.llm.base import BaseLLMService
 from app.schemas.chat import (
     ChatMessageRequest,
@@ -21,6 +22,7 @@ from app.services.llm.query_understanding_engine import llm_query_engine
 from app.services.weather.weather_processor import weather_processor, WeatherFactSnapshot
 from app.services.llm.context_manager import context_manager
 from app.services.llm.tool_registry import tool_registry
+from app.services.llm import gemini_tools
 from app.services.advisory.travel_engine import travel_engine
 from app.services.advisory.farming_engine import farming_engine
 from app.services.advisory.urban_engine import urban_engine
@@ -32,17 +34,76 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
+# Map of tool names to callable async wrappers in gemini_tools
+TOOL_FUNCTIONS_MAP: Dict[str, Any] = {
+    "get_current_weather": gemini_tools.get_current_weather,
+    "get_hourly_forecast": gemini_tools.get_hourly_forecast,
+    "get_rain_timeline": gemini_tools.get_rain_timeline,
+    "get_multi_day_forecast": gemini_tools.get_multi_day_forecast,
+    "get_weather_risk": gemini_tools.get_weather_risk,
+    "get_official_alerts": gemini_tools.get_official_alerts,
+    "evaluate_travel_conditions": gemini_tools.evaluate_travel_conditions,
+    "evaluate_farming_conditions": gemini_tools.evaluate_farming_conditions,
+    "evaluate_urban_conditions": gemini_tools.evaluate_urban_conditions,
+    "evaluate_climate_trend": gemini_tools.evaluate_climate_trend,
+    "get_nwp_comparison": gemini_tools.get_nwp_comparison,
+    "get_official_disaster_alerts": gemini_tools.get_official_disaster_alerts,
+}
+
 
 class GeminiLLMService(BaseLLMService):
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
-        self.model_name = settings.GEMINI_MODEL
+        self.model_name = settings.GEMINI_MODEL or "gemini-3.6-flash"
         self.client = None
         if self.api_key:
             try:
                 self.client = genai.Client(api_key=self.api_key)
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client: {e}")
+
+    def _build_system_instruction(
+        self,
+        personalization_ctx,
+        ctx,
+        user_message: str,
+        user_lang: str = "en",
+    ) -> str:
+        """
+        Builds Megha persona system prompt without pre-fetched data.
+        The model uses real function calling / tool execution to fetch live data.
+        """
+        persona_guidance = ""
+        if personalization_ctx.active_persona == "farmer":
+            persona_guidance = "• Active User Persona: Farmer / Agricultural Operator. Provide practical farming context (irrigation, spraying, soil, harvesting) whenever relevant."
+        elif personalization_ctx.active_persona == "traveler":
+            persona_guidance = "• Active User Persona: Commuter / Long-distance Traveler. Prioritize road safety, route timing, visibility, and travel advisories."
+        elif personalization_ctx.active_persona == "urban_worker":
+            persona_guidance = "• Active User Persona: Outdoor / Urban Worker. Highlight waterlogging risk, heat index stress, and wind disruption."
+        elif personalization_ctx.active_persona == "daily_commuter":
+            persona_guidance = "• Active User Persona: Daily Office/School Commuter. Highlight peak commute rain timing and two-wheeler road conditions."
+
+        active_loc_name = ctx.active_location.name if ctx.active_location else "New Delhi, India"
+
+        return f"""
+You are Megha (मेघा) — an exceptionally warm, intelligent, and caring personal AI weather companion (like a trusted friend on ChatGPT).
+
+[CORE ROLE & CAPABILITIES]
+You have direct access to authoritative meteorological tools. Whenever a user asks about current weather, rain, forecasts, travel safety, farming decisions, urban risks, climate trends, physics NWP models, or official disaster warnings, you MUST call the relevant tool(s) to fetch real, grounded facts. NEVER fabricate or guess numbers.
+
+[ACTIVE CONVERSATION CONTEXT]
+• Last Known User Location: {active_loc_name}
+• Preferred Language/Locale: {user_lang}
+{persona_guidance}
+
+[HOW TO REPLY - CONVERSATIONAL FRIEND STYLE]
+1. NO GREETINGS: NEVER start with "नमस्ते! मैं आपकी दोस्त मेघा हूँ" or robotic self-introductions. Start directly with the clear, conversational answer in the very first sentence. (Exception: If the user ONLY said 'Hi' or 'Hello', reply warmly and ask how you can help).
+2. DIRECT & PRACTICAL: Give crisp, actionable answers (e.g., whether to carry an umbrella, when rain starts, safe departure hours, irrigation advice).
+3. MULTILINGUAL & CULTURAL FLUENCY: Always respond in the EXACT language and script the user wrote in (Hindi हिंदी, Hinglish, Bengali বাংলা, Marathi मराठी, Tamil தமிழ், Telugu తెలుగు, Gujarati ગુજરાતી, Punjabi ਪੰਜਾਬੀ, Kannada ಕನ್ನಡ, Malayalam മലയാളം, Odia ଓଡ଼ିଆ, or English).
+4. NO ROBOTIC HEADINGS OR TEMPLATES: Never use rigid labels like "सलाह:", "Reasons:", "Advisory Headline:", or bullet dumps unless requested. Write in natural, warm paragraphs.
+5. NATURAL NUMBER USAGE: Do not rattle off raw statistics mechanically (humidity %, pressure hPa) unless asked. Speak naturally so it sounds delightful and human when read or spoken aloud.
+6. TOOL USAGE: You have tools for current weather, rain timeline, 7-day forecast, travel conditions, farming rules, urban conditions, historical climate trends, NWP model intercomparisons, and official disaster alerts. Call whatever tools are needed to answer accurately.
+""".strip()
 
     async def process_chat(self, request: ChatMessageRequest) -> ChatMessageResponse:
         session_id = request.session_id or str(uuid.uuid4())
@@ -58,263 +119,127 @@ class GeminiLLMService(BaseLLMService):
             explicit_session_persona=request.persona,
         )
 
-        # 3. Multi-Intent & Contextual Entity Understanding (LLM-based, with
-        # automatic regex fallback inside llm_query_engine if Gemini fails)
-        parsed = await llm_query_engine.parse_query(request.message, context=ctx)
-        # Track whether we're guessing the location vs. it being genuinely
-        # known, so the LLM response prompt can be honest about it (e.g. ask
-        # for clarification) instead of silently answering for the wrong
-        # city as the old regex parser used to.
-        location_was_defaulted = False
-        if parsed.location:
-            target_city = parsed.location
-        elif ctx.active_location:
-            target_city = ctx.active_location.name
-        else:
-            target_city = "New Delhi"
-            location_was_defaulted = True
-
-        # 4. Geocode location & Deterministic Data Retrieval (Skip for pure greetings)
-        tools_called: List[str] = ["query_understanding"]
-        lat = request.latitude or (ctx.active_location.latitude if ctx.active_location else 28.6139)
-        lon = request.longitude or (ctx.active_location.longitude if ctx.active_location else 77.2090)
-        loc_name = target_city
-        card_data = None
-        snapshot = None
-
-        if parsed.primary_intent != "GREETING":
-            geocoded = await weather_service.geocode(target_city)
-            if geocoded:
-                lat, lon, loc_name = geocoded
-
-            tools_called.extend(["get_current_weather", "get_multi_day_forecast"])
-            raw_weather = await weather_service.get_comprehensive_weather(lat, lon, loc_name)
-            snapshot = weather_processor.process(raw_weather or {}, loc_name)
-
-            card_data = WeatherCardData(
-                location=loc_name,
-                temperature=snapshot.current_temp,
-                condition=snapshot.current_condition,
-                weather_code=(raw_weather or {}).get("current", {}).get("weather_code", 0),
-                humidity=snapshot.current_humidity,
-                wind_speed=snapshot.current_wind_kmh,
-                precipitation=snapshot.current_precipitation_mm,
-            )
-
+        active_lang = request.language or ctx.language or "en"
         effective_persona = personalization_ctx.active_persona
-        active_lang = parsed.language_hint if parsed.language_hint != "en" else (request.language or ctx.language or "en")
 
-        travel_assessment_data: Optional[TravelAssessmentData] = None
-        farming_advisory_data: Optional[FarmingAdvisoryData] = None
-        urban_advisory_data: Optional[UrbanAdvisoryData] = None
-        climate_trend_data: Optional[ClimateTrendData] = None
-        risk_level = "LOW"
-
-        # 7. Execute Deterministic Advisory Engines based on Intents
-        if parsed.primary_intent != "GREETING":
-            if "TRAVEL_PLANNING" in [parsed.primary_intent] + parsed.secondary_intents or effective_persona == "traveler":
-                tools_called.append("evaluate_travel_conditions")
-                res = travel_engine.evaluate(
-                    snapshot=snapshot,
-                    destination=loc_name,
-                    time_frame=parsed.time_range,
-                    activity=parsed.activity or "driving",
-                )
-                travel_assessment_data = TravelAssessmentData(**res.model_dump())
-                risk_level = res.travel_risk
-
-            if "FARMER_ASSISTANCE" in [parsed.primary_intent] + parsed.secondary_intents or effective_persona == "farmer":
-                tools_called.append("evaluate_farming_conditions")
-                res = farming_engine.evaluate(
-                    snapshot=snapshot,
-                    location=loc_name,
-                    time_frame=parsed.time_range,
-                    crop=parsed.crop or "general",
-                    activity=parsed.activity or "general",
-                )
-                farming_advisory_data = FarmingAdvisoryData(**res.model_dump())
-
-            if "URBAN_ADVISORY" in [parsed.primary_intent] + parsed.secondary_intents or effective_persona == "urban_worker":
-                tools_called.append("evaluate_urban_conditions")
-                res = urban_engine.evaluate(
-                    snapshot=snapshot,
-                    location=loc_name,
-                    time_frame=parsed.time_range,
-                    activity=parsed.activity or "general",
-                )
-                urban_advisory_data = UrbanAdvisoryData(**res.model_dump())
-                if res.risk_level in ("HIGH", "SEVERE"):
-                    risk_level = res.risk_level
-
-            if "CLIMATE_TREND" in [parsed.primary_intent] + parsed.secondary_intents:
-                tools_called.append("evaluate_climate_trend")
-                month = parsed.target_month or date.today().month
-                years_back = parsed.years_back or 10
-                trend_res = await climate_trend_service.get_monthly_trend(
-                    lat, lon, loc_name, month=month, years_back=years_back
-                )
-                if trend_res:
-                    climate_trend_data = ClimateTrendData(**trend_res)
-
-            if "WEATHER_WARNING" in [parsed.primary_intent] + parsed.secondary_intents:
-                tools_called.append("get_official_alerts")
-                if any(a.risk_level == "SEVERE" for a in snapshot.alerts):
-                    risk_level = "SEVERE"
-                elif any(a.risk_level == "HIGH" for a in snapshot.alerts):
-                    risk_level = "HIGH"
-                elif any(a.risk_level == "MODERATE" for a in snapshot.alerts):
-                    risk_level = "MODERATE"
-
-        # 8. Check Gemini Client Availability
         if not self.client:
             raise RuntimeError("Gemini API key is required. Please set GEMINI_API_KEY in .env.")
 
-        # 9. Construct Factual Grounding Snapshot for Gemini Prompt
-        forecast_summary = ""
-        if snapshot:
-            forecast_summary = "\n".join([
-                f"- {d.date}: {d.condition} | Max: {d.temp_max}°C, Min: {d.temp_min}°C | Rain Prob: {d.rain_probability_max}% (Rain: {d.precipitation_sum_mm} mm)"
-                for d in snapshot.daily_7_day_forecast[:5]
-            ])
+        # Initialize thread-safe tool execution context
+        tool_ctx = gemini_tools.init_tool_context()
+        if ctx.active_location:
+            tool_ctx.resolved_lat = ctx.active_location.latitude
+            tool_ctx.resolved_lon = ctx.active_location.longitude
+            tool_ctx.resolved_location_name = ctx.active_location.name
 
-        travel_block = f"""
-[TRAVEL ASSESSMENT ENGINE OUTPUT - AUTHORITATIVE VERDICT]
-- Destination: {travel_assessment_data.destination}
-- Time Frame: {travel_assessment_data.time_frame}
-- Travel Risk Level: {travel_assessment_data.travel_risk}
-- Official Verdict: {travel_assessment_data.verdict}
-- Reasons: {', '.join(travel_assessment_data.reasons)}
-- Required Safety Guidelines: {', '.join(travel_assessment_data.guidelines)}
-""" if travel_assessment_data else ""
+        system_instruction = self._build_system_instruction(
+            personalization_ctx=personalization_ctx,
+            ctx=ctx,
+            user_message=request.message,
+            user_lang=active_lang,
+        )
 
-        farming_block = f"""
-[FARMING ADVISORY ENGINE OUTPUT - AGRONOMIC RULES]
-- Crop: {farming_advisory_data.crop}
-- Activity: {farming_advisory_data.activity}
-- Agronomic Recommendation: {farming_advisory_data.recommendation}
-- Advisory Headline: {farming_advisory_data.advisory_headline}
-- Reasons: {', '.join(farming_advisory_data.reasons)}
-- Required Action Steps: {', '.join(farming_advisory_data.actionable_steps)}
-""" if farming_advisory_data else ""
-
-        urban_block = f"""
-[URBAN / SMART-CITY ADVISORY ENGINE OUTPUT]
-- Location: {urban_advisory_data.location}
-- Risk Level: {urban_advisory_data.risk_level}
-- Verdict: {urban_advisory_data.verdict}
-- Reasons: {', '.join(urban_advisory_data.reasons)}
-- Required Actions: {', '.join(urban_advisory_data.actionable_steps)}
-""" if urban_advisory_data else ""
-
-        climate_trend_block = f"""
-[HISTORICAL CLIMATE TREND ENGINE OUTPUT - {climate_trend_data.years_covered[0] if climate_trend_data.years_covered else ''}-{climate_trend_data.years_covered[-1] if climate_trend_data.years_covered else ''}]
-- Location: {climate_trend_data.location}
-- Month: {climate_trend_data.month}
-- Years Covered: {', '.join(str(y) for y in climate_trend_data.years_covered)}
-- Average Total Rainfall: {climate_trend_data.avg_total_rainfall_mm} mm (range {climate_trend_data.min_total_rainfall_mm}-{climate_trend_data.max_total_rainfall_mm} mm)
-- Average Max/Min Temp: {climate_trend_data.avg_temp_max}°C / {climate_trend_data.avg_temp_min}°C
-- Typical Condition: {climate_trend_data.typical_condition}
-- Rainfall Trend Over Period: {climate_trend_data.rainfall_trend}
-- Summary: {climate_trend_data.summary}
-""" if climate_trend_data else ""
-
-        history_block = "\n".join([
-            f"{m['role'].upper()}: {m['text']}"
-            for m in ctx.history[-4:]
-        ]) if ctx.history else "None"
-
-        if parsed.primary_intent == "GREETING":
-            system_instruction = f"""
-You are Megha (मेघा) — a sweet, polite, and caring personal AI weather companion and friend.
-The user has just greeted you (e.g. Hi, Hello, Kaise ho, Namaste).
-Reply warmly, sweetly, and conversationally in the user's language. 
-Tell them you are doing well and ask how you can help them with weather, rain updates, travel, or farming plans today.
-IMPORTANT RULE: DO NOT provide unasked weather numbers, temperatures, or technical stats for simple greetings!
-"""
-        else:
-            loc_disp = snapshot.location if snapshot else loc_name
-            location_note = (
-                f"8. The user didn't mention a specific city, so you're currently showing "
-                f"{loc_disp} as a default. Gently ask which city they mean (in the same "
-                f"reply) rather than assuming they meant {loc_disp}.\n"
-                if location_was_defaulted else ""
-            )
-            system_instruction = f"""
-You are Megha (मेघा) — a super friendly, helpful, and smart personal AI weather assistant (just like talking to a caring friend on ChatGPT).
-
-[METEOROLOGICAL LIVE DATA FOR {loc_disp}]
-• Location: {loc_disp}
-• Current: {snapshot.current_temp if snapshot else ''}°C, {snapshot.current_condition if snapshot else ''}, Humidity: {snapshot.current_humidity if snapshot else ''}%, Wind: {snapshot.current_wind_kmh if snapshot else ''} km/h
-• Tomorrow: {snapshot.tomorrow_condition if snapshot else ''}, {snapshot.tomorrow_temp_min if snapshot else ''}°C to {snapshot.tomorrow_temp_max if snapshot else ''}°C, Rain chance: {snapshot.tomorrow_rain_prob if snapshot else ''}%
-• Next 24h Rain Chance Peak: {snapshot.rain_timeline.peak_probability if snapshot else ''}% ({snapshot.rain_timeline.summary if snapshot else ''})
-• 5-Day Outlook:
-{forecast_summary}
-{travel_block}
-{farming_block}
-{urban_block}
-{climate_trend_block}
-[RECENT CONVERSATION HISTORY]
-{history_block}
-
-[HOW TO REPLY - CONVERSATIONAL FRIEND STYLE]
-1. NEVER start with "नमस्ते! मैं आपकी दोस्त मेघा हूँ" or any self-introduction. Start directly with the clear answer in the very first sentence.
-2. Directly answer the user's specific question (commute, travel, farming, rain timing) with warm, practical guidance.
-3. If they ask about travel/commuting, tell them whether it's safe and what time is best to leave.
-4. If they ask about crops or farming, advise them simply and practically (e.g. if rain will wash spray away).
-5. If historical climate trend data is provided above, narrate it naturally (e.g. "August in Delhi usually sees around X mm of rain, and it's been trending up over the last few years") instead of dumping raw numbers.
-6. MULTILINGUAL FLUENCY: Always reply in the EXACT language and script the user asked in (e.g., Hindi हिंदी, Hinglish, Bengali বাংলা, Marathi मराठी, Tamil தமிழ், Telugu తెలుగు, Gujarati ગુજરાતી, Punjabi ਪੰਜਾਬੀ, Kannada ಕನ್ನಡ, Malayalam മലയാളം, Odia ଓଡ଼ିଆ, or English). Ensure high cultural fluency and natural spoken tone.
-7. DO NOT use robotic headings, formal report templates, or technical labels (like "सलाह:", "Reasons:", "Advisory Headline:"). Just write naturally in friendly paragraphs!
-8. NO ROBOTIC NUMBER DUMPING: Never mechanically rattle off raw statistics (humidity %, wind speed km/h, etc.) unless specifically asked. Talk like a friendly human companion so the response sounds sweet and natural when spoken aloud.
-9. NO GREETINGS: Do NOT greet or say hello. Jump straight into the advice.
-{location_note}
-"""
-
-        tools_called.append("gemini_generate_content")
         reply_text = None
-        # Configured model first, then a couple of verified-stable fallbacks.
-        # Keep this list to models you've actually confirmed your API key can
-        # access — an unverified/incorrect model ID here silently burns a
-        # request and makes every fallback attempt fail the same way.
-        candidate_models = [self.model_name, "gemini-3.5-flash", "gemini-3.5-flash-lite"]
-        seen_models = set()
-        last_err = None
+        tools_called: List[str] = []
 
-        for mdl in candidate_models:
-            if mdl in seen_models:
-                continue
-            seen_models.add(mdl)
-            try:
-                response = await asyncio.to_thread(
-                    self.client.models.generate_content,
-                    model=mdl,
-                    contents=request.message,
+        try:
+            # ---------------------------------------------------------------
+            # Real Gemini Tool-Calling Loop (Option B: Explicit Multi-Turn AFC)
+            # ---------------------------------------------------------------
+            contents: List[Any] = []
+
+            # Include recent conversation turns for context
+            for hist_msg in (ctx.history[-4:] if ctx.history else []):
+                role = "user" if hist_msg.get("role") == "user" else "model"
+                text = hist_msg.get("text")
+                if text:
+                    contents.append(types.Content(role=role, parts=[types.Part.from_text(text=text)]))
+
+            # Current user query
+            contents.append(types.Content(role="user", parts=[types.Part.from_text(text=request.message)]))
+
+            max_turns = 5
+            for turn in range(max_turns):
+                resp = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
-                        temperature=0.7,
+                        tools=gemini_tools.ALL_GEMINI_TOOLS,
+                        temperature=0.4,
                     ),
                 )
-                if response and response.text:
-                    reply_text = response.text
+
+                if not resp.candidates:
                     break
-            except Exception as e:
-                last_err = e
-                logger.error(f"Gemini model '{mdl}' failed: {type(e).__name__}: {e}")
+
+                candidate = resp.candidates[0]
+                has_function_calls = bool(resp.function_calls)
+
+                if has_function_calls:
+                    # Append model's thought / tool calls to conversation
+                    contents.append(candidate.content)
+
+                    # Execute model-requested tools
+                    tool_response_parts: List[types.Part] = []
+                    for fc in resp.function_calls:
+                        fn_name = fc.name
+                        fn = TOOL_FUNCTIONS_MAP.get(fn_name)
+                        fn_args = dict(fc.args) if fc.args else {}
+
+                        logger.info(f"Gemini requested tool: {fn_name}({fn_args})")
+                        try:
+                            if fn:
+                                result = await fn(**fn_args)
+                            else:
+                                result = {"error": f"Tool '{fn_name}' not recognized."}
+                        except Exception as tool_err:
+                            logger.error(f"Error executing tool {fn_name}: {tool_err}")
+                            result = {"error": str(tool_err)}
+
+                        tool_response_parts.append(
+                            types.Part.from_function_response(
+                                name=fn_name,
+                                response={"result": result},
+                            )
+                        )
+
+                    contents.append(types.Content(role="tool", parts=tool_response_parts))
+                else:
+                    # Model produced final text response
+                    reply_text = resp.text
+                    break
+
+            tools_called = list(tool_ctx.tools_called)
+
+        except Exception as tool_flow_err:
+            logger.warning(
+                f"Gemini tool-calling flow encountered an error: {tool_flow_err}. "
+                f"Activating resilient two-pass fallback path."
+            )
+            # Fallback path per Section 6 of specification
+            return await self._process_chat_fallback(
+                request=request,
+                ctx=ctx,
+                personalization_ctx=personalization_ctx,
+                confirmation_suggestion=confirmation_suggestion,
+                user_id=user_id,
+                session_id=session_id,
+            )
 
         if not reply_text:
-            # Log loudly with the actual upstream error so failures are
-            # diagnosable from server logs instead of showing up to the user
-            # as a generic "technical" error with no explanation.
-            logger.error(
-                f"Gemini generation failed across all candidate models "
-                f"{candidate_models}. Last error: {last_err}"
-            )
-            raise RuntimeError(
-                f"Gemini generation failed across all available models: {last_err}"
+            logger.warning("Gemini tool loop produced no text; triggering fallback.")
+            return await self._process_chat_fallback(
+                request=request,
+                ctx=ctx,
+                personalization_ctx=personalization_ctx,
+                confirmation_suggestion=confirmation_suggestion,
+                user_id=user_id,
+                session_id=session_id,
             )
 
-        # Clean any accidental repetitive greetings on non-greeting turns
-        if reply_text and parsed.primary_intent != "GREETING":
-            import re
+        # Clean accidental self-introduction if present
+        if reply_text:
             greeting_patterns = [
                 r"^(?:नमस्ते|नमस्कार|हेलो|हाय|हैलो)[!।,.\s]*(?:मैं\s+(?:आपकी\s+)?(?:दोस्त\s+|सहेली\s+|वेदर\s+दोस्त\s+)?मेघा\s+हूँ[।!.,\s]*)?",
                 r"^(?:Hello|Hi|Hey)[!।,.\s]*(?:I am|I'm|this is)?\s*(?:your\s+)?(?:friend\s+|weather\s+assistant\s+)?Megha[।!.,\s]*",
@@ -323,52 +248,42 @@ You are Megha (मेघा) — a super friendly, helpful, and smart personal A
             for pat in greeting_patterns:
                 reply_text = re.sub(pat, "", reply_text, flags=re.IGNORECASE).strip()
 
-        # 11. Suggestion Chips
-        suggestions = []
-        if "TRAVEL_PLANNING" in [parsed.primary_intent] + parsed.secondary_intents or effective_persona == "traveler":
-            suggestions = [
-                f"Road visibility in {loc_name}",
-                f"Will it rain tomorrow in {loc_name}?",
-                "Packing tips for this trip",
-            ]
-        elif "FARMER_ASSISTANCE" in [parsed.primary_intent] + parsed.secondary_intents or effective_persona == "farmer":
-            suggestions = [
-                f"Should I irrigate my fields in {loc_name}?",
-                "Best time for pesticide spraying",
-                "7-day rainfall accumulation",
-            ]
-        elif effective_persona == "daily_commuter":
-            suggestions = [
-                f"Morning commute rain timing in {loc_name}",
-                f"Evening commute forecast in {loc_name}",
-                "Two-wheeler road conditions",
-            ]
-        elif "URBAN_ADVISORY" in [parsed.primary_intent] + parsed.secondary_intents or effective_persona == "urban_worker":
-            suggestions = [
-                f"Waterlogging risk in {loc_name} today",
-                f"Heat advisory for outdoor workers in {loc_name}",
-                f"Wind/traffic disruption risk in {loc_name}",
-            ]
-        elif "CLIMATE_TREND" in [parsed.primary_intent] + parsed.secondary_intents:
-            suggestions = [
-                f"Compare to this year's forecast in {loc_name}",
-                f"Rainfall trend for {loc_name} last 10 years",
-                f"Best time of year to visit {loc_name}",
-            ]
-        elif parsed.primary_intent in ["TOMORROW_FORECAST", "RAIN_CHECK"]:
-            suggestions = [
-                f"Hourly rain timing in {loc_name}",
-                f"Can I travel to {loc_name} tomorrow?",
-                f"5-day forecast for {loc_name}",
-            ]
-        else:
-            suggestions = [
-                f"Will it rain tomorrow in {loc_name}?",
-                f"Can I travel to {loc_name} tomorrow?",
-                f"7-day forecast for {loc_name}",
-            ]
+        # Extract structured artifacts captured during tool execution
+        card_data = tool_ctx.card_data
+        travel_assessment_data = tool_ctx.travel_assessment_data
+        farming_advisory_data = tool_ctx.farming_advisory_data
+        urban_advisory_data = tool_ctx.urban_advisory_data
+        climate_trend_data = tool_ctx.climate_trend_data
+        risk_level = tool_ctx.risk_level
+        loc_name = tool_ctx.resolved_location_name or (ctx.active_location.name if ctx.active_location else "New Delhi")
+        lat = tool_ctx.resolved_lat or (ctx.active_location.latitude if ctx.active_location else 28.6139)
+        lon = tool_ctx.resolved_lon or (ctx.active_location.longitude if ctx.active_location else 77.2090)
 
-        # If confirmation suggestion is active, append confirmation chips
+        # Primary intent mapping
+        if "evaluate_travel_conditions" in tools_called:
+            primary_intent = "TRAVEL_PLANNING"
+        elif "evaluate_farming_conditions" in tools_called:
+            primary_intent = "FARMER_ASSISTANCE"
+        elif "evaluate_urban_conditions" in tools_called:
+            primary_intent = "URBAN_ADVISORY"
+        elif "evaluate_climate_trend" in tools_called:
+            primary_intent = "CLIMATE_TREND"
+        elif "get_rain_timeline" in tools_called:
+            primary_intent = "RAIN_CHECK"
+        elif "get_multi_day_forecast" in tools_called:
+            primary_intent = "MULTI_DAY_FORECAST"
+        elif "get_nwp_comparison" in tools_called:
+            primary_intent = "NWP_ANALYSIS"
+        elif "get_current_weather" in tools_called:
+            primary_intent = "CURRENT_WEATHER"
+        else:
+            primary_intent = "GENERAL_WEATHER"
+
+        secondary_intents = [t for t in tools_called if t != primary_intent]
+
+        # Suggestion chips
+        suggestions = self._build_suggestions(primary_intent, effective_persona, loc_name)
+
         confirmation_dto = None
         if confirmation_suggestion:
             confirmation_dto = PersonaConfirmationDTO(
@@ -382,7 +297,7 @@ You are Megha (मेघा) — a super friendly, helpful, and smart personal A
                 if chip["label"] not in suggestions:
                     suggestions.append(chip["label"])
 
-        # 11. Update Session Memory & Context in Redis / Local Store (Single batched roundtrip)
+        # Update Session Memory
         await context_manager.record_turn(
             session_id=session_id,
             user_message=request.message,
@@ -390,21 +305,21 @@ You are Megha (मेघा) — a super friendly, helpful, and smart personal A
             active_location={"name": loc_name, "latitude": lat, "longitude": lon},
             persona=effective_persona,
             language=active_lang,
-            recent_intent=parsed.primary_intent,
-            secondary_intents=parsed.secondary_intents,
-            recent_time_reference=parsed.time_range,
+            recent_intent=primary_intent,
+            secondary_intents=secondary_intents,
+            recent_time_reference="current",
         )
 
-        # 12. Sarvam Bulbul Studio Voice Audio Synthesis (for sweet human voice)
+        # Sarvam Voice Audio Synthesis
         audio_base64 = None
         audio_chunks = None
-        if settings.SARVAM_API_KEY:
+        if settings.SARVAM_API_KEY and reply_text:
             try:
                 from app.services.voice.sarvam_voice_service import sarvam_voice_service
                 lang_map = {
                     "hi": "hi-IN", "en": "en-IN", "mr": "mr-IN", "bn": "bn-IN",
                     "ta": "ta-IN", "te": "te-IN", "gu": "gu-IN", "kn": "kn-IN",
-                    "ml": "ml-IN", "pa": "pa-IN", "od": "od-IN"
+                    "ml": "ml-IN", "pa": "pa-IN", "od": "od-IN",
                 }
                 target_tts_lang = lang_map.get(active_lang, "hi-IN")
                 tts_result = await sarvam_voice_service.text_to_speech(
@@ -419,16 +334,15 @@ You are Megha (मेघा) — a super friendly, helpful, and smart personal A
             except Exception as e:
                 logger.warning(f"Sarvam TTS generation error: {e}")
 
-        # Retrieve profile for inferred personas scores
         user_profile = await persona_engine.get_profile(user_id)
 
         return ChatMessageResponse(
             session_id=session_id,
             response=reply_text,
             language=active_lang,
-            primary_intent=parsed.primary_intent,
-            secondary_intents=parsed.secondary_intents,
-            intent=parsed.primary_intent,
+            primary_intent=primary_intent,
+            secondary_intents=secondary_intents,
+            intent=primary_intent,
             persona_applied=effective_persona,
             weather_data=card_data,
             travel_assessment=travel_assessment_data,
@@ -443,3 +357,142 @@ You are Megha (मेघा) — a super friendly, helpful, and smart personal A
             persona_confirmation=confirmation_dto,
             inferred_personas=user_profile.inferred_personas,
         )
+
+    def _build_suggestions(self, primary_intent: str, persona: str, location: str) -> List[str]:
+        if primary_intent == "TRAVEL_PLANNING" or persona == "traveler":
+            return [
+                f"Road visibility in {location}",
+                f"Will it rain tomorrow in {location}?",
+                "Packing tips for this trip",
+            ]
+        elif primary_intent == "FARMER_ASSISTANCE" or persona == "farmer":
+            return [
+                f"Should I irrigate my fields in {location}?",
+                "Best time for pesticide spraying",
+                "7-day rainfall accumulation",
+            ]
+        elif persona == "daily_commuter":
+            return [
+                f"Morning commute rain timing in {location}",
+                f"Evening commute forecast in {location}",
+                "Two-wheeler road conditions",
+            ]
+        elif primary_intent == "URBAN_ADVISORY" or persona == "urban_worker":
+            return [
+                f"Waterlogging risk in {location} today",
+                f"Heat advisory for outdoor workers in {location}",
+                f"Wind/traffic disruption risk in {location}",
+            ]
+        elif primary_intent == "CLIMATE_TREND":
+            return [
+                f"Compare to this year's forecast in {location}",
+                f"Rainfall trend for {location} last 10 years",
+                f"Best time of year to visit {location}",
+            ]
+        return [
+            f"Will it rain tomorrow in {location}?",
+            f"Can I travel to {location} tomorrow?",
+            f"7-day forecast for {location}",
+        ]
+
+    async def _process_chat_fallback(
+        self,
+        request: ChatMessageRequest,
+        ctx,
+        personalization_ctx,
+        confirmation_suggestion,
+        user_id: str,
+        session_id: str,
+    ) -> ChatMessageResponse:
+        """
+        Resilient two-pass fallback path (query parsing + manual engine dispatch + prose generation)
+        used if direct tool-calling fails.
+        """
+        logger.info("Executing two-pass fallback chat generation.")
+        parsed = await llm_query_engine.parse_query(request.message, context=ctx)
+
+        target_city = parsed.location or (ctx.active_location.name if ctx.active_location else "New Delhi")
+        tools_called = ["query_understanding_fallback"]
+
+        lat = request.latitude or (ctx.active_location.latitude if ctx.active_location else 28.6139)
+        lon = request.longitude or (ctx.active_location.longitude if ctx.active_location else 77.2090)
+        loc_name = target_city
+
+        geocoded = await weather_service.geocode(target_city)
+        if geocoded:
+            lat, lon, loc_name = geocoded
+
+        raw_weather = await weather_service.get_comprehensive_weather(lat, lon, loc_name)
+        snapshot = weather_processor.process(raw_weather or {}, loc_name)
+
+        card_data = WeatherCardData(
+            location=loc_name,
+            temperature=snapshot.current_temp,
+            condition=snapshot.current_condition,
+            weather_code=(raw_weather or {}).get("current", {}).get("weather_code", 0),
+            humidity=snapshot.current_humidity,
+            wind_speed=snapshot.current_wind_kmh,
+            precipitation=snapshot.current_precipitation_mm,
+        )
+
+        travel_data = None
+        farming_data = None
+        urban_data = None
+        climate_data = None
+        risk_level = "LOW"
+
+        if "TRAVEL_PLANNING" in [parsed.primary_intent] + parsed.secondary_intents or personalization_ctx.active_persona == "traveler":
+            res = travel_engine.evaluate(snapshot, loc_name, time_frame=parsed.time_range, activity=parsed.activity or "driving")
+            travel_data = TravelAssessmentData(**res.model_dump())
+            risk_level = res.travel_risk
+
+        if "FARMER_ASSISTANCE" in [parsed.primary_intent] + parsed.secondary_intents or personalization_ctx.active_persona == "farmer":
+            res = farming_engine.evaluate(snapshot, loc_name, time_frame=parsed.time_range, crop=parsed.crop or "general", activity=parsed.activity or "general")
+            farming_data = FarmingAdvisoryData(**res.model_dump())
+
+        if "URBAN_ADVISORY" in [parsed.primary_intent] + parsed.secondary_intents or personalization_ctx.active_persona == "urban_worker":
+            res = urban_engine.evaluate(snapshot, loc_name, time_frame=parsed.time_range, activity=parsed.activity or "general")
+            urban_data = UrbanAdvisoryData(**res.model_dump())
+
+        fallback_prompt = f"You are Megha, a caring weather companion. Weather in {loc_name}: {snapshot.current_temp}°C, {snapshot.current_condition}. Answer the user warmly in their language."
+        reply_text = None
+        try:
+            resp = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=request.message,
+                config=types.GenerateContentConfig(system_instruction=fallback_prompt, temperature=0.7),
+            )
+            if resp and resp.text:
+                reply_text = resp.text
+        except Exception as fb_err:
+            logger.warning(f"Fallback generation model call failed: {fb_err}. Using factual template.")
+
+        if not reply_text:
+            if parsed.language_hint in ("hi", "hinglish"):
+                reply_text = f"{loc_name} में अभी तापमान {snapshot.current_temp}°C है और मौसम {snapshot.current_condition} बना हुआ है।"
+            else:
+                reply_text = f"In {loc_name}, it is currently {snapshot.current_temp}°C with {snapshot.current_condition}."
+
+        user_profile = await persona_engine.get_profile(user_id)
+
+        return ChatMessageResponse(
+            session_id=session_id,
+            response=reply_text,
+            language=parsed.language_hint or "en",
+            primary_intent=parsed.primary_intent,
+            secondary_intents=parsed.secondary_intents,
+            intent=parsed.primary_intent,
+            persona_applied=personalization_ctx.active_persona,
+            weather_data=card_data,
+            travel_assessment=travel_data,
+            farming_advisory=farming_data,
+            urban_advisory=urban_data,
+            climate_trend=climate_data,
+            risk_level=risk_level,
+            tools_called=tools_called,
+            suggestions=self._build_suggestions(parsed.primary_intent, personalization_ctx.active_persona, loc_name),
+            inferred_personas=user_profile.inferred_personas,
+        )
+
+
+gemini_service = GeminiLLMService()
