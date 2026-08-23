@@ -73,7 +73,7 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {
         "message": "Welcome to WeatherGPT API",
@@ -83,8 +83,8 @@ def root():
     }
 
 
-@app.get("/health", tags=["System"])
-@app.get("/ping", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route("/ping", methods=["GET", "HEAD"], tags=["System"])
 async def health_ping():
     """Ultra-lightweight ping endpoint for 24/7 keep-alive monitors (UptimeRobot, Render Health Check)."""
     return {

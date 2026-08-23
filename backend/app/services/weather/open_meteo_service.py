@@ -180,7 +180,7 @@ class OpenMeteoService:
             pass
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(
                     f"{self.weather_url}/forecast",
                     params={
@@ -201,8 +201,12 @@ class OpenMeteoService:
                     except Exception:
                         pass
                     return data
+                else:
+                    logger.warning(f"Open-Meteo returned status {resp.status_code} for ({lat}, {lon})")
+        except httpx.TimeoutException:
+            logger.warning(f"Open-Meteo forecast timeout for ({lat}, {lon}) ({location_name})")
         except Exception as e:
-            logger.error(f"Comprehensive weather fetch error: {e}")
+            logger.warning(f"Open-Meteo forecast fetch error for ({lat}, {lon}): {type(e).__name__} - {e}")
         return None
 
 
