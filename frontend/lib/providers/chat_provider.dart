@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../services/ai_chat_service.dart';
+import '../services/location_service.dart';
 
 class ChatProvider with ChangeNotifier {
   final AiChatService _aiChatService = AiChatService();
@@ -38,7 +39,9 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> sendUserMessage(String text, {double lat = 28.6139, double lon = 77.2090, String? activePersona}) async {
+  final LocationService _locationService = LocationService();
+
+  Future<void> sendUserMessage(String text, {double? lat, double? lon, String? activePersona}) async {
     if (text.trim().isEmpty) return;
 
     final userMsg = ChatMessage(
@@ -53,10 +56,21 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      double targetLat = lat ?? 28.6139;
+      double targetLon = lon ?? 77.2090;
+
+      if (lat == null || lon == null) {
+        try {
+          final loc = await _locationService.getCurrentLocation();
+          targetLat = loc.latitude;
+          targetLon = loc.longitude;
+        } catch (_) {}
+      }
+
       final aiResponse = await _aiChatService.sendMessage(
         query: text.trim(),
-        latitude: lat,
-        longitude: lon,
+        latitude: targetLat,
+        longitude: targetLon,
         activePersona: activePersona,
       );
       _messages.add(aiResponse);

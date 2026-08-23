@@ -8,6 +8,7 @@ import '../widgets/dynamic_weather_orb.dart';
 import '../widgets/context_badge.dart';
 import 'chat_screen.dart';
 import 'alerts_screen.dart';
+import 'map_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -87,29 +88,59 @@ class _HomeScreenState extends State<HomeScreen> {
                         confidence: contextProv.userContext.confidenceScore,
                       ),
 
-                      // Severe Weather Alert Bell
-                      IconButton(
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                            border: Border.all(
-                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                      Row(
+                        children: [
+                          // GIS Map Button
+                          IconButton(
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
+                                border: Border.all(
+                                  color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.public_rounded,
+                                size: 18,
+                                color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                              ),
                             ),
+                            tooltip: 'GIS Radar & Alert Map',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const MapScreen()),
+                              );
+                            },
                           ),
-                          child: Icon(
-                            Icons.notifications_active_outlined,
-                            size: 18,
-                            color: isDark ? AppColors.sunnyGold : AppColors.alertCrimson,
+                          const SizedBox(width: 4),
+                          // Severe Weather Alert Bell
+                          IconButton(
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
+                                border: Border.all(
+                                  color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.notifications_active_outlined,
+                                size: 18,
+                                color: isDark ? AppColors.sunnyGold : AppColors.alertCrimson,
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                              );
+                            },
                           ),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const AlertsScreen()),
-                          );
-                        },
+                        ],
                       ),
                     ],
                   ),
@@ -142,6 +173,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+
+                // Visible connectivity warning: if the backend couldn't be
+                // reached, say so instead of silently showing placeholder
+                // weather numbers as if they were real.
+                if (weatherProv.errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.wifi_off_rounded, size: 16, color: Colors.redAccent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Can't reach WeatherGPT server — showing placeholder data. "
+                              "Check your connection or server IP in Settings.",
+                              style: TextStyle(fontSize: 11, color: Colors.redAccent.shade200),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 // Main Title Headline
                 Padding(

@@ -5,6 +5,8 @@ import '../models/user_context.dart';
 import '../providers/theme_provider.dart';
 import '../providers/user_context_provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/voice_provider.dart';
+import '../core/constants/api_constants.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,7 +19,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _severeAlertsEnabled = true;
   bool _rainPrecipAlertsEnabled = true;
   bool _dailyBriefingEnabled = true;
-  bool _voiceAutoSpeech = true;
   bool _isCelsius = true;
   bool _preciseGpsLocation = true;
 
@@ -190,6 +191,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showServerConfigDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final controller = TextEditingController(text: ApiConstants.customBaseUrl ?? 'http://192.168.31.46:8000/api/v1');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Backend Server URL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your PC / Laptop IP when testing on a physical phone on the same Wi-Fi:',
+              style: TextStyle(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'http://192.168.x.x:8000/api/v1',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ApiConstants.setCustomBaseUrl(null);
+              setState(() {});
+              Navigator.pop(ctx);
+            },
+            child: const Text('Reset Auto'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.emeraldNeon,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: () {
+              ApiConstants.setCustomBaseUrl(controller.text.trim());
+              setState(() {});
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Server URL set to: ${ApiConstants.baseUrl}')),
+              );
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -322,13 +382,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const Divider(height: 1),
-                      _buildSwitchTile(
-                        context,
-                        icon: Icons.record_voice_over_rounded,
-                        title: 'Voice Auto-Speech Feedback',
-                        subtitle: 'Play voice audio when voice orb answers',
-                        value: _voiceAutoSpeech,
-                        onChanged: (val) => setState(() => _voiceAutoSpeech = val),
+                      Consumer<VoiceProvider>(
+                        builder: (context, voiceProvider, _) => Column(
+                          children: [
+                            _buildSwitchTile(
+                              context,
+                              icon: Icons.record_voice_over_rounded,
+                              title: 'Voice Auto-Speech Feedback',
+                              subtitle: 'Automatically read WeatherGPT\'s replies aloud',
+                              value: voiceProvider.autoSpeechEnabled,
+                              onChanged: voiceProvider.setAutoSpeechEnabled,
+                            ),
+                            const Divider(height: 1),
+                            _buildSwitchTile(
+                              context,
+                              icon: Icons.graphic_eq_rounded,
+                              title: 'Natural Voice (Cloud)',
+                              subtitle: voiceProvider.naturalVoiceEnabled
+                                  ? 'Higher-quality voice \u2014 uses data, needs network'
+                                  : 'Off: using free on-device voice, works offline',
+                              value: voiceProvider.naturalVoiceEnabled,
+                              onChanged: voiceProvider.setNaturalVoiceEnabled,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -358,6 +435,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: const Text('Read our zero-tracking data promise', style: TextStyle(fontSize: 12)),
                         trailing: const Icon(Icons.chevron_right_rounded, size: 20),
                         onTap: () => _showPrivacyPolicyModal(context),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.dns_outlined,
+                          color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                        ),
+                        title: const Text('Backend Server URL', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text(ApiConstants.customBaseUrl ?? 'Auto (${ApiConstants.baseUrl})', style: const TextStyle(fontSize: 12)),
+                        trailing: const Icon(Icons.edit_outlined, size: 18),
+                        onTap: () => _showServerConfigDialog(context),
                       ),
                       const Divider(height: 1),
                       ListTile(

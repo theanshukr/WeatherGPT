@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: weathergpt-backend
+    env: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PROJECT_NAME
+        value: "WeatherGPT Backend"
+      - key: API_V1_STR
+        value: "/api/v1"
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-3.5-flash"
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: OPEN_METEO_BASE_URL
+        value: "https://api.open-meteo.com/v1"
+      - key: GEOCODING_BASE_URL
+        value: "https://geocoding-api.open-meteo.com/v1"

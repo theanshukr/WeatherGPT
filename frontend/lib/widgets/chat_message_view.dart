@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../models/chat_message.dart';
 import '../core/theme/app_colors.dart';
+import '../providers/voice_provider.dart';
 import 'package:intl/intl.dart';
 
 class ChatMessageView extends StatefulWidget {
@@ -23,6 +25,7 @@ class ChatMessageView extends StatefulWidget {
 
 class _ChatMessageViewState extends State<ChatMessageView> {
   bool _copied = false;
+  bool _autoSpokenForThisMessage = false;
 
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
@@ -32,8 +35,30 @@ class _ChatMessageViewState extends State<ChatMessageView> {
     });
   }
 
+  void _maybeAutoSpeak(BuildContext context) {
+    // Only auto-speak once the message has finished streaming, and only
+    // once per message instance — otherwise every rebuild while the
+    // widget is on screen would re-trigger it.
+    if (_autoSpokenForThisMessage) return;
+    if (widget.message.role != MessageRole.assistant) return;
+    if (widget.message.isStreaming) return;
+    if (widget.message.content.trim().isEmpty) return;
+
+    final voiceProvider = context.read<VoiceProvider>();
+    if (!voiceProvider.autoSpeechEnabled) return;
+
+    _autoSpokenForThisMessage = true;
+    // Defer to after this frame so we're not calling notifyListeners()
+    // (inside speakMessage) during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      voiceProvider.speakMessage(widget.message.id, widget.message.content);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    _maybeAutoSpeak(context);
     final isUser = widget.message.role == MessageRole.user;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -183,43 +208,95 @@ class _ChatMessageViewState extends State<ChatMessageView> {
                       const SizedBox(height: 12),
 
                       // ChatGPT Style Action Bar: Copy & Speak buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          GestureDetector(
-                            onTap: () => _copyToClipboard(widget.message.content),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _copied ? Icons.check_rounded : Icons.copy_rounded,
-                                    size: 13,
-                                    color: _copied
-                                        ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                                        : (isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary),
+                      Consumer<VoiceProvider>(
+                        builder: (context, voiceProvider, _) {
+                          final speaking = voiceProvider.isSpeaking(widget.message.id);
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  if (speaking) {
+                                    voiceProvider.stop();
+                                  } else {
+                                    voiceProvider.speakMessage(
+                                      widget.message.id,
+                                      widget.message.content,
+                                    );
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: speaking
+                                        ? (isDark
+                                            ? AppColors.emeraldNeon.withValues(alpha: 0.15)
+                                            : AppColors.emeraldDark.withValues(alpha: 0.1))
+                                        : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _copied ? 'Copied' : 'Copy',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: _copied
-                                          ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                                          : (isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary),
-                                    ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        speaking ? Icons.stop_circle_rounded : Icons.volume_up_rounded,
+                                        size: 13,
+                                        color: speaking
+                                            ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                                            : (isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        speaking ? 'Stop' : 'Speak',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: speaking
+                                              ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                                              : (isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
+                              GestureDetector(
+                                onTap: () => _copyToClipboard(widget.message.content),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _copied ? Icons.check_rounded : Icons.copy_rounded,
+                                        size: 13,
+                                        color: _copied
+                                            ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                                            : (isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _copied ? 'Copied' : 'Copy',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: _copied
+                                              ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                                              : (isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

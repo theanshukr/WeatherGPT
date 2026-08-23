@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../models/alert_model.dart';
 import '../services/alert_service.dart';
+import 'map_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -47,6 +48,19 @@ class _AlertsScreenState extends State<AlertsScreen> {
           'Severe Weather Advisories',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.public_rounded, color: AppColors.emeraldNeon),
+            tooltip: 'View on GIS Radar Map',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MapScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

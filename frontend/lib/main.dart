@@ -5,10 +5,21 @@ import 'providers/theme_provider.dart';
 import 'providers/weather_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/user_context_provider.dart';
+import 'providers/voice_provider.dart';
 import 'screens/splash_screen.dart';
+import 'services/supabase_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Supabase Cloud Auth & Database
+  try {
+    await SupabaseService.initialize();
+    await SupabaseService.signInAnonymously();
+  } catch (e) {
+    debugPrint('Supabase initialization fallback: $e');
+  }
+
   runApp(
     MultiProvider(
       providers: [
@@ -16,6 +27,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => WeatherProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => UserContextProvider()),
+        ChangeNotifierProvider(create: (_) => VoiceProvider()),
       ],
       child: const WeatherGptApp(),
     ),

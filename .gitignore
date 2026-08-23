@@ -2,10 +2,30 @@
 .env
 .env.local
 .env.*.local
+*.env
+backend/.env
+web_app/.env
 !.env.example
+!backend/.env.example
+
+# Flutter & Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/build/
+*.lock.db
+
+# Archives & Temporary files
+*.zip
+*.tar.gz
+*.rar
 
 # Dependencies
 node_modules/
+web_app/node_modules/
 jspm_packages/
 .pnp
 .pnp.js
@@ -22,6 +42,7 @@ venv/
 ENV/
 develop-eggs/
 dist/
+web_app/dist/
 downloads/
 eggs/
 .eggs/
