@@ -183,42 +183,24 @@ class WeatherData {
   }
 
   // Pre-configured default representation
-  static WeatherData defaultData() {
+  static WeatherData empty() {
     final now = DateTime.now();
     return WeatherData(
-      location: const WeatherLocation(name: 'New Delhi', latitude: 28.6139, longitude: 77.2090, state: 'Delhi'),
+      location: const WeatherLocation(name: 'Locating...', latitude: 28.6139, longitude: 77.2090),
       observedAt: now,
-      temperature: 28.0,
-      feelsLike: 30.0,
-      humidity: 62.0,
-      windSpeed: 14.0,
-      windDirection: 210.0,
-      rainProbability: 65.0,
-      rainfallAmount: 4.2,
-      uvIndex: 6.0,
-      visibility: 7.5,
+      temperature: 0.0,
+      feelsLike: 0.0,
+      humidity: 0.0,
+      windSpeed: 0.0,
+      windDirection: 0.0,
+      rainProbability: 0.0,
+      rainfallAmount: 0.0,
+      uvIndex: 0.0,
+      visibility: 0.0,
       condition: WeatherConditionType.partlyCloudy,
-      conditionDescription: 'Partly Cloudy • Rain Expected Evening',
-      hourlyForecast: List.generate(
-        8,
-        (i) => HourlyForecast(
-          time: now.add(Duration(hours: i * 2)),
-          temperature: 28.0 - (i > 3 ? (i - 3) * 1.5 : -i * 0.8),
-          rainProbability: i >= 3 ? 75.0 : 20.0,
-          condition: i >= 3 ? WeatherConditionType.rain : WeatherConditionType.partlyCloudy,
-        ),
-      ),
-      dailyForecast: List.generate(
-        5,
-        (i) => DailyForecast(
-          date: now.add(Duration(days: i)),
-          tempMin: 22.0 + (i % 2),
-          tempMax: 32.0 - (i % 3),
-          rainProbability: (i == 1 || i == 3) ? 70.0 : 15.0,
-          condition: (i == 1 || i == 3) ? WeatherConditionType.rain : WeatherConditionType.clear,
-          summary: i == 1 ? 'High chance of evening rainfall' : 'Clear skies and warm breeze',
-        ),
-      ),
+      conditionDescription: 'Connecting to atmospheric data...',
+      hourlyForecast: const [],
+      dailyForecast: const [],
     );
   }
 }

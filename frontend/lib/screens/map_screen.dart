@@ -48,7 +48,7 @@ class _MapScreenState extends State<MapScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _alerts = WeatherAlert.defaultAlerts();
+          _alerts = [];
           _isLoading = false;
         });
       }

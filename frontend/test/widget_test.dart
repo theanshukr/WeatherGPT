@@ -6,13 +6,13 @@ import 'package:frontend/providers/user_context_provider.dart';
 
 void main() {
   group('WeatherGPT Unit & State Tests', () {
-    test('WeatherData default model initialization test', () {
-      final defaultWeather = WeatherData.defaultData();
-      expect(defaultWeather.location.name, 'New Delhi');
-      expect(defaultWeather.temperature, 28.0);
-      expect(defaultWeather.rainProbability, 65.0);
-      expect(defaultWeather.hourlyForecast.isNotEmpty, true);
-      expect(defaultWeather.dailyForecast.isNotEmpty, true);
+    test('WeatherData empty model initialization test', () {
+      final weather = WeatherData.empty();
+      expect(weather.location.name, 'Locating...');
+      expect(weather.temperature, 0.0);
+      expect(weather.rainProbability, 0.0);
+      expect(weather.hourlyForecast.isEmpty, true);
+      expect(weather.dailyForecast.isEmpty, true);
     });
 
     test('UserContext & Persona switching test', () {

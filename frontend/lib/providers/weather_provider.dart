@@ -7,7 +7,7 @@ class WeatherProvider with ChangeNotifier {
   final WeatherService _weatherService = WeatherService();
   final LocationService _locationService = LocationService();
 
-  WeatherData _weatherData = WeatherData.defaultData();
+  WeatherData _weatherData = WeatherData.empty();
   bool _isLoading = false;
   String? _errorMessage;
 

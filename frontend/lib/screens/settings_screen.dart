@@ -6,7 +6,6 @@ import '../providers/theme_provider.dart';
 import '../providers/user_context_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/voice_provider.dart';
-import '../core/constants/api_constants.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -185,65 +184,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
             child: const Text('Clear', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showServerConfigDialog(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final controller = TextEditingController(text: ApiConstants.customBaseUrl ?? 'http://192.168.31.46:8000/api/v1');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Backend Server URL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter your PC / Laptop IP when testing on a physical phone on the same Wi-Fi:',
-              style: TextStyle(fontSize: 13, height: 1.4),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'http://192.168.x.x:8000/api/v1',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              ),
-              style: const TextStyle(fontSize: 13),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              ApiConstants.setCustomBaseUrl(null);
-              setState(() {});
-              Navigator.pop(ctx);
-            },
-            child: const Text('Reset Auto'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.emeraldNeon,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            onPressed: () {
-              ApiConstants.setCustomBaseUrl(controller.text.trim());
-              setState(() {});
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Server URL set to: ${ApiConstants.baseUrl}')),
-              );
-            },
-            child: const Text('Save', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -438,17 +378,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           trailing: const Icon(Icons.chevron_right_rounded, size: 20),
                           onTap: () => _showPrivacyPolicyModal(context),
                         ),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Icon(
-                          Icons.dns_outlined,
-                          color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                        ),
-                        title: const Text('Backend Server URL', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                        subtitle: Text(ApiConstants.customBaseUrl ?? 'Auto (${ApiConstants.baseUrl})', style: const TextStyle(fontSize: 12)),
-                        trailing: const Icon(Icons.edit_outlined, size: 18),
-                        onTap: () => _showServerConfigDialog(context),
                       ),
                       const Divider(height: 1),
                       ListTile(

@@ -59,46 +59,4 @@ class WeatherAlert {
         return AlertSeverity.advisory;
     }
   }
-
-  static List<WeatherAlert> defaultAlerts() {
-    final now = DateTime.now();
-    return [
-      WeatherAlert(
-        id: 'alert_delhi_01',
-        title: '⚠️ Heavy Rainfall & Gusty Winds Expected',
-        description: 'Thunderstorm activity expected near New Delhi between 4:00 PM and 8:00 PM today.',
-        instructions: 'Avoid waterlogged low-lying areas. Farmers should pause pesticide spraying.',
-        severity: AlertSeverity.warning,
-        area: 'Delhi NCR & surrounding plains',
-        latitude: 28.6139,
-        longitude: 77.2090,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 4)),
-      ),
-      WeatherAlert(
-        id: 'alert_mumbai_02',
-        title: '🌊 High Tide & Coastal Surge Warning',
-        description: 'Monsoon surge producing high sea swell and local inundation along coastal roads.',
-        instructions: 'Fishermen and small crafts advised not to venture into deep sea.',
-        severity: AlertSeverity.emergency,
-        area: 'Mumbai Coastline & Konkan',
-        latitude: 19.0760,
-        longitude: 72.8777,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 6)),
-      ),
-      WeatherAlert(
-        id: 'alert_bengaluru_03',
-        title: '⚡ Lightning & Urban Waterlogging Advisory',
-        description: 'Convective thunderstorm cells active over urban tech corridors.',
-        instructions: 'Plan evening commute to avoid prone underpasses.',
-        severity: AlertSeverity.watch,
-        area: 'Bengaluru Urban & Electronic City',
-        latitude: 12.9716,
-        longitude: 77.5946,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 3)),
-      ),
-    ];
-  }
 }
