@@ -157,7 +157,6 @@ class WeatherData {
   });
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
-    final current = json['current'] as Map<String, dynamic>?;
     return WeatherData(
       location: WeatherLocation.fromJson(json['location'] as Map<String, dynamic>? ?? {}),
       observedAt: DateTime.tryParse(json['observed_at'] as String? ?? '') ?? DateTime.now(),

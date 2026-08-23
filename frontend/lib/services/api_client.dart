@@ -25,8 +25,6 @@ class ApiClient {
   final http.Client _client = http.Client();
   String? _authToken;
 
-  String get baseUrl => kIsWeb ? ApiConstants.webBaseUrl : ApiConstants.devBaseUrl;
-
   void setAuthToken(String token) {
     _authToken = token;
   }
