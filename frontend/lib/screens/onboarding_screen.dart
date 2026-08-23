@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import 'auth_screen.dart';
 import 'main_navigation_screen.dart';
+import '../services/supabase_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -12,7 +14,6 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  bool _isSigningIn = false;
 
   final List<({String title, String subtitle, String icon, String tag})> _slides = [
     (
@@ -35,26 +36,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
-  void _handleGoogleSignIn() {
-    setState(() => _isSigningIn = true);
-
-    // Simulated Google OAuth Flow with seamless standalone transition
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (mounted) {
-        setState(() => _isSigningIn = false);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
-        );
-      }
-    });
+  void _navigateToAuth() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+    );
   }
 
-  void _handleSkipToHome() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
-    );
+  Future<void> _handleSkipToHome() async {
+    try {
+      await SupabaseService.signInAnonymously();
+    } catch (_) {}
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 0)),
+      );
+    }
   }
 
   @override
@@ -240,12 +238,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 children: [
-                  // "Continue with Google" Button
+                  // "Sign In / Register" Button
                   GestureDetector(
-                    onTap: _isSigningIn ? null : _handleGoogleSignIn,
+                    onTap: _navigateToAuth,
                     child: Container(
                       width: double.infinity,
-                      height: 54,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
                         borderRadius: BorderRadius.circular(28),
@@ -266,55 +264,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          if (_isSigningIn) ...[
-                            SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                                ),
-                              ),
+                          Icon(
+                            Icons.person_outline_rounded,
+                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Sign In or Create Account',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Signing in with Google...',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                              ),
-                            ),
-                          ] else ...[
-                            // Authentic Google G Icon
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'G',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Continue with Google',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                              ),
-                            ),
-                          ],
+                          ),
                         ],
                       ),
                     ),

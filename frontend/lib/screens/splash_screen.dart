@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../widgets/dynamic_weather_orb.dart';
+import '../services/supabase_service.dart';
 import 'onboarding_screen.dart';
+import 'main_navigation_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,25 +21,32 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.initState();
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1200),
     );
     _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
     _fadeController.forward();
 
-    // Navigate to Onboarding after 2.4s
-    Future.delayed(const Duration(milliseconds: 2400), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 600),
-          ),
-        );
-      }
-    });
+    _checkSessionAndNavigate();
+  }
+
+  Future<void> _checkSessionAndNavigate() async {
+    await Future.delayed(const Duration(milliseconds: 2000));
+    if (!mounted) return;
+
+    final session = SupabaseService.client.auth.currentSession;
+    final targetScreen = session != null
+        ? const MainNavigationScreen()
+        : const OnboardingScreen();
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   @override
@@ -82,10 +91,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               children: [
                 const Spacer(flex: 3),
 
-                // Center Mini Glowing Dynamic Orb
+                // Center Dynamic Orb
                 const DynamicWeatherOrb(
                   size: 160,
-                  isListening: false,
+                  orbState: VoiceOrbState.idle,
                 ),
 
                 const SizedBox(height: 36),
@@ -94,7 +103,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 Text(
                   'WeatherGPT',
                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: -0.5,
                       ),
                 ),
@@ -102,7 +111,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
                 // Tagline
                 Text(
-                  'AI Weather Intelligence',
+                  'AI Weather & Disaster Intelligence',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
