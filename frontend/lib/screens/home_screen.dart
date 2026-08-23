@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
@@ -130,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${weatherProv.weatherData.location.name} • ${weatherProv.weatherData.temperature.toInt()}°C ${weatherProv.weatherData.conditionDescription}',
+                        '${weatherProv.weatherData.location.name} - ${weatherProv.weatherData.temperature.toInt()} C ${weatherProv.weatherData.conditionDescription}',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -159,23 +161,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 10),
 
                 // Status Indicator Prompt
-                Text(
-                  chatProv.isListening ? '🎙️ Listening to your voice...' : 'Tap the orb to speak or use keyboard below',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: chatProv.isListening
-                        ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                        : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (chatProv.isListening) ...[
+                      Icon(
+                        Icons.mic_none_rounded,
+                        size: 16,
+                        color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      chatProv.isListening ? 'Listening to your voice...' : 'Tap the orb to speak or use keyboard below',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: chatProv.isListening
+                            ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                      ),
+                    ),
+                  ],
                 ),
 
                 const Spacer(flex: 2),
 
                 // Center Stage: Dynamic Glowing Weather Orb (Interactive)
                 DynamicWeatherOrb(
-                  size: MediaQuery.of(context).size.width * 0.65,
+                  size: math.min(
+                    MediaQuery.of(context).size.width * 0.65,
+                    MediaQuery.of(context).size.height * 0.42,
+                  ),
                   isListening: chatProv.isListening,
                   onTap: _onOrbTap,
                 ),
@@ -229,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 100),
+                const SizedBox(height: 32),
               ],
             ),
           ],
@@ -237,4 +255,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
+}                                                     
+
+
+
+
+
+
+
+
+
+
+
+
+
+

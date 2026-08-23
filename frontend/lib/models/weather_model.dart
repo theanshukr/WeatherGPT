@@ -61,10 +61,10 @@ class HourlyForecast {
 
   factory HourlyForecast.fromJson(Map<String, dynamic> json) {
     return HourlyForecast(
-      time: DateTime.tryParse(json['time'] as String? ?? '') ?? DateTime.now(),
-      temperature: (json['temperature'] as num?)?.toDouble() ?? 26.0,
-      rainProbability: (json['rain_probability'] as num?)?.toDouble() ?? 0.0,
-      condition: _parseCondition(json['condition'] as String?),
+      time: DateTime.tryParse((json['timestamp'] ?? json['time']) as String? ?? '') ?? DateTime.now(),
+      temperature: ((json['temperature_c'] ?? json['temperature']) as num?)?.toDouble() ?? 26.0,
+      rainProbability: ((json['precipitation_probability_percent'] ?? json['rain_probability']) as num?)?.toDouble() ?? 0.0,
+      condition: _parseCondition((json['weather_description'] ?? json['condition']) as String?),
       iconCode: json['icon'] as String? ?? 'cloud-sun',
     );
   }
@@ -80,9 +80,12 @@ class HourlyForecast {
       case 'cloudy':
         return WeatherConditionType.cloudy;
       case 'partly_cloudy':
+      case 'partly cloudy':
         return WeatherConditionType.partlyCloudy;
       case 'fog':
         return WeatherConditionType.fog;
+      case 'snow':
+        return WeatherConditionType.snow;
       default:
         return WeatherConditionType.clear;
     }
@@ -109,11 +112,11 @@ class DailyForecast {
   factory DailyForecast.fromJson(Map<String, dynamic> json) {
     return DailyForecast(
       date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
-      tempMin: (json['temp_min'] as num?)?.toDouble() ?? 22.0,
-      tempMax: (json['temp_max'] as num?)?.toDouble() ?? 32.0,
-      rainProbability: (json['rain_probability'] as num?)?.toDouble() ?? 10.0,
-      condition: HourlyForecast._parseCondition(json['condition'] as String?),
-      summary: json['summary'] as String? ?? 'Partly cloudy with pleasant evening.',
+      tempMin: ((json['temp_min_c'] ?? json['temp_min']) as num?)?.toDouble() ?? 22.0,
+      tempMax: ((json['temp_max_c'] ?? json['temp_max']) as num?)?.toDouble() ?? 32.0,
+      rainProbability: ((json['precipitation_probability_max_percent'] ?? json['rain_probability']) as num?)?.toDouble() ?? 10.0,
+      condition: HourlyForecast._parseCondition((json['weather_description'] ?? json['condition']) as String?),
+      summary: (json['weather_description'] ?? json['summary']) as String? ?? 'Partly cloudy with pleasant evening.',
     );
   }
 }
@@ -154,25 +157,26 @@ class WeatherData {
   });
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
+    final current = json['current'] as Map<String, dynamic>?;
     return WeatherData(
       location: WeatherLocation.fromJson(json['location'] as Map<String, dynamic>? ?? {}),
-      observedAt: DateTime.tryParse(json['observed_at'] as String? ?? '') ?? DateTime.now(),
-      temperature: (json['temperature'] as num?)?.toDouble() ?? 28.0,
-      feelsLike: (json['feels_like'] as num?)?.toDouble() ?? 30.0,
-      humidity: (json['humidity'] as num?)?.toDouble() ?? 65.0,
-      windSpeed: (json['wind_speed'] as num?)?.toDouble() ?? 12.0,
-      windDirection: (json['wind_direction'] as num?)?.toDouble() ?? 180.0,
-      rainProbability: (json['rain_probability'] as num?)?.toDouble() ?? 40.0,
-      rainfallAmount: (json['rainfall_amount'] as num?)?.toDouble() ?? 2.5,
-      uvIndex: (json['uv_index'] as num?)?.toDouble() ?? 5.0,
-      visibility: (json['visibility'] as num?)?.toDouble() ?? 8.0,
-      condition: HourlyForecast._parseCondition(json['weather_condition'] as String?),
-      conditionDescription: json['weather_condition'] as String? ?? 'Partly Cloudy',
-      hourlyForecast: (json['hourly'] as List<dynamic>?)
+      observedAt: DateTime.tryParse((current?['timestamp'] ?? json['observed_at']) as String? ?? '') ?? DateTime.now(),
+      temperature: ((current?['temperature_c'] ?? json['temperature']) as num?)?.toDouble() ?? 28.0,
+      feelsLike: ((current?['apparent_temperature_c'] ?? json['feels_like']) as num?)?.toDouble() ?? 30.0,
+      humidity: ((current?['humidity_percent'] ?? json['humidity']) as num?)?.toDouble() ?? 65.0,
+      windSpeed: ((current?['wind_speed_kmh'] ?? json['wind_speed']) as num?)?.toDouble() ?? 12.0,
+      windDirection: ((current?['wind_direction_deg'] ?? json['wind_direction']) as num?)?.toDouble() ?? 180.0,
+      rainProbability: ((current?['precipitation_probability_percent'] ?? json['rain_probability']) as num?)?.toDouble() ?? 40.0,
+      rainfallAmount: ((current?['precipitation_mm'] ?? json['rainfall_amount']) as num?)?.toDouble() ?? 2.5,
+      uvIndex: ((current?['uv_index'] ?? json['uv_index']) as num?)?.toDouble() ?? 5.0,
+      visibility: ((current?['visibility_m'] != null ? (current!['visibility_m'] as num) / 1000.0 : json['visibility']) as num?)?.toDouble() ?? 8.0,
+      condition: HourlyForecast._parseCondition((current?['weather_description'] ?? json['weather_condition']) as String?),
+      conditionDescription: (current?['weather_description'] ?? json['weather_condition']) as String? ?? 'Partly Cloudy',
+      hourlyForecast: ((json['forecast_hourly'] ?? json['hourly']) as List<dynamic>?)
               ?.map((e) => HourlyForecast.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      dailyForecast: (json['daily'] as List<dynamic>?)
+      dailyForecast: ((json['forecast_daily'] ?? json['daily']) as List<dynamic>?)
               ?.map((e) => DailyForecast.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],

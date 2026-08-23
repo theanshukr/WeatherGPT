@@ -69,8 +69,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  children: [
             // Top Bar: Skip Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -113,19 +118,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // PageView Slides
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _slides.length,
-                onPageChanged: (index) => setState(() => _currentPage = index),
-                itemBuilder: (context, index) {
-                  final slide = _slides[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
+                    // PageView Slides
+                    SizedBox(
+                      height: 390,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        itemCount: _slides.length,
+                        onPageChanged: (index) => setState(() => _currentPage = index),
+                        itemBuilder: (context, index) {
+                          final slide = _slides[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
                         // Tag Badge
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -201,12 +207,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 height: 1.45,
                               ),
                         ),
-                      ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  );
-                },
-              ),
-            ),
 
             // Animated Page Dots Indicator
             Row(
@@ -348,8 +354,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-          ],
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

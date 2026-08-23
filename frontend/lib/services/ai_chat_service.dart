@@ -14,20 +14,20 @@ class AiChatService {
     String language = 'en',
     String? activePersona,
   }) async {
-    /*
-    final response = await _apiClient.post(
-      ApiConstants.chatMessage,
-      body: {
-        'message': query,
-        'location': {'latitude': latitude, 'longitude': longitude},
-        'language': language,
-        'context_hint': activePersona,
-      },
-    );
-    if (response != null && response['data'] != null) {
-      return ChatMessage.fromJson(response['data'] as Map<String, dynamic>);
-    }
-    */
+    try {
+      final response = await _apiClient.post(
+        ApiConstants.chatMessage,
+        body: {
+          'message': query,
+          'location': {'latitude': latitude, 'longitude': longitude},
+          'language': language,
+          'context_hint': activePersona,
+        },
+      );
+      if (response != null && response['data'] != null) {
+        return ChatMessage.fromJson(response['data'] as Map<String, dynamic>);
+      }
+    } catch (_) {}
     
     final lower = query.toLowerCase();
     if (lower.contains('rain') || lower.contains('umbrella') || lower.contains('baarish')) {
