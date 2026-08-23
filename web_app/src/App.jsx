@@ -66,6 +66,11 @@ function useWebSocketAlerts() {
 
 export default function App() {
   // ── State ──
+  const [serverTarget, setServerTarget] = useState('local'); // 'local' or 'render'
+  const effectiveApiBase = serverTarget === 'render'
+    ? 'https://weathergpt-backend-3n4b.onrender.com/api/v1'
+    : '/api/v1';
+
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
@@ -106,7 +111,7 @@ export default function App() {
 
   // ── Pre-fetch Sarvam voice for welcome ──
   useEffect(() => {
-    fetch(`${API_BASE}/voice/tts`, {
+    fetch(`${effectiveApiBase}/voice/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -410,7 +415,7 @@ export default function App() {
   // ── Profile fetch ──
   const fetchProfile = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/user/profile/${userId}`);
+      const res = await fetch(`${effectiveApiBase}/user/profile/${userId}`);
       if (res.ok) {
         const data = await res.json();
         setProfile(data);
@@ -418,7 +423,7 @@ export default function App() {
     } catch (e) {
       console.log('Profile fetch error:', e);
     }
-  }, [userId]);
+  }, [userId, effectiveApiBase]);
 
   useEffect(() => {
     fetchProfile();
@@ -445,7 +450,7 @@ export default function App() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
       try {
-        const res = await fetch(`${API_BASE}/chat/message`, {
+        const res = await fetch(`${effectiveApiBase}/chat/message`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -498,7 +503,7 @@ export default function App() {
           {
             id: (Date.now() + 1).toString(),
             role: 'ai',
-            text: '⚠️ बैकएंड सर्वर से कनेक्ट करने में परेशानी हुई। कृपया सुनिश्चित करें कि बैकएंड `http://localhost:8000` पर चल रहा है।',
+            text: `⚠️ बैकएंड (${serverTarget === 'render' ? 'Render Cloud' : 'Localhost:8000'}) से कनेक्ट करने में परेशानी हुई।`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           },
         ]);
@@ -507,7 +512,7 @@ export default function App() {
         setLoading(false);
       }
     },
-    [inputText, sessionId, userId, persona, language, autoSpeak, speakText, fetchProfile]
+    [inputText, sessionId, userId, persona, language, autoSpeak, speakText, fetchProfile, effectiveApiBase, serverTarget]
   );
 
   // ── Persona action ──
@@ -519,7 +524,7 @@ export default function App() {
       if (action.includes('defer')) act = 'defer';
 
       try {
-        await fetch(`${API_BASE}/user/profile/${userId}/persona`, {
+        await fetch(`${effectiveApiBase}/user/profile/${userId}/persona`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: act, persona: targetPersona }),
@@ -541,7 +546,7 @@ export default function App() {
         console.error(e);
       }
     },
-    [userId, fetchProfile]
+    [userId, fetchProfile, effectiveApiBase]
   );
 
   // ── Clear chat ──
@@ -549,7 +554,7 @@ export default function App() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     setSpeakingMsgId(null);
     try {
-      await fetch(`${API_BASE}/chat/sessions/${sessionId}`, { method: 'DELETE' });
+      await fetch(`${effectiveApiBase}/chat/sessions/${sessionId}`, { method: 'DELETE' });
     } catch (e) {}
     setSessionId('sess_' + Math.random().toString(36).substring(2, 9));
     setPersona('general');
@@ -566,7 +571,7 @@ export default function App() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
-  }, [sessionId]);
+  }, [sessionId, effectiveApiBase]);
 
   // ── Render ──
   return (
@@ -593,6 +598,8 @@ export default function App() {
         language={language}
         showProfile={showProfile}
         profile={profile}
+        serverTarget={serverTarget}
+        onToggleServerTarget={() => setServerTarget(serverTarget === 'render' ? 'local' : 'render')}
         onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
         onToggleLanguage={() => setLanguage(language === 'hi' ? 'en' : 'hi')}
         onToggleProfile={() => setShowProfile(!showProfile)}
@@ -648,6 +655,25 @@ export default function App() {
             )}
 
             <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick Intent Test Chips */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, marginBottom: 4 }}>
+            {[
+              { label: '🚗 Delhi se Gurgaon Commute', query: 'mujhe shaam ko Delhi se Gurgaon jana h kya road pe traffic ya paani bharega?' },
+              { label: '🌾 Wheat Spraying Advice', query: 'Kal subah meri gehu ki fasal par pesticide spray karna theek rahega?' },
+              { label: '🏙️ Outdoor Work Risk', query: 'Kal Delhi me outdoor construction work ke liye weather safe hai?' },
+              { label: '📈 August Climate Trends', query: 'Delhi me August ke mahine me pichle saalon me kitni barish hoti rhi h?' },
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSendMessage(chip.query)}
+                className="chip-btn"
+                style={{ fontSize: '0.75rem', padding: '4px 10px', background: 'rgba(255,255,255,0.03)' }}
+              >
+                {chip.label}
+              </button>
+            ))}
           </div>
 
           {/* Input */}
