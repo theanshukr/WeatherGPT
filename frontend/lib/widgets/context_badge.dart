@@ -30,7 +30,7 @@ class ContextBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(info.icon, style: const TextStyle(fontSize: 14)),
+          Icon(info.icon, size: 16),
           const SizedBox(width: 6),
           Text(
             info.title,
@@ -61,18 +61,18 @@ class ContextBadge extends StatelessWidget {
     );
   }
 
-  ({String icon, String title}) _getPersonaInfo(DetectedPersona persona) {
+  ({IconData icon, String title}) _getPersonaInfo(DetectedPersona persona) {
     switch (persona) {
       case DetectedPersona.farmer:
-        return (icon: '🌾', title: 'Farmer Context');
+        return (icon: Icons.grass, title: 'Farmer Context');
       case DetectedPersona.traveller:
-        return (icon: '✈️', title: 'Traveller Context');
+        return (icon: Icons.flight_takeoff, title: 'Traveller Context');
       case DetectedPersona.student:
-        return (icon: '🎒', title: 'Student Context');
+        return (icon: Icons.backpack_outlined, title: 'Student Context');
       case DetectedPersona.commuter:
-        return (icon: '🚗', title: 'Commuter Context');
+        return (icon: Icons.directions_car_outlined, title: 'Commuter Context');
       default:
-        return (icon: '☀️', title: 'General Context');
+        return (icon: Icons.wb_sunny_outlined, title: 'General Context');
     }
   }
 }

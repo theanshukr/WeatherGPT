@@ -80,9 +80,12 @@ class HourlyForecast {
       case 'cloudy':
         return WeatherConditionType.cloudy;
       case 'partly_cloudy':
+      case 'partly cloudy':
         return WeatherConditionType.partlyCloudy;
       case 'fog':
         return WeatherConditionType.fog;
+      case 'snow':
+        return WeatherConditionType.snow;
       default:
         return WeatherConditionType.clear;
     }
@@ -154,6 +157,7 @@ class WeatherData {
   });
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
+    final current = json['current'] as Map<String, dynamic>?;
     return WeatherData(
       location: WeatherLocation.fromJson(json['location'] as Map<String, dynamic>? ?? {}),
       observedAt: DateTime.tryParse(json['observed_at'] as String? ?? '') ?? DateTime.now(),
@@ -172,7 +176,7 @@ class WeatherData {
               ?.map((e) => HourlyForecast.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      dailyForecast: (json['daily'] as List<dynamic>?)
+      dailyForecast: ((json['forecast_daily'] ?? json['daily']) as List<dynamic>?)
               ?.map((e) => DailyForecast.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],

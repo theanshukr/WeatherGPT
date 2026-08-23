@@ -426,15 +426,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onChanged: (val) => setState(() => _preciseGpsLocation = val),
                       ),
                       const Divider(height: 1),
-                      ListTile(
-                        leading: Icon(
-                          Icons.privacy_tip_outlined,
-                          color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                      Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.privacy_tip_outlined,
+                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                          ),
+                          title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          subtitle: const Text('Read our zero-tracking data promise', style: TextStyle(fontSize: 12)),
+                          trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                          onTap: () => _showPrivacyPolicyModal(context),
                         ),
-                        title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                        subtitle: const Text('Read our zero-tracking data promise', style: TextStyle(fontSize: 12)),
-                        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-                        onTap: () => _showPrivacyPolicyModal(context),
                       ),
                       const Divider(height: 1),
                       ListTile(
@@ -535,24 +538,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: AppColors.emeraldNeon,
-      secondary: Icon(
-        icon,
-        color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-        size: 22,
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          fontSize: 12,
-          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+    return Material(
+      color: Colors.transparent,
+      child: SwitchListTile(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: AppColors.emeraldNeon,
+        secondary: Icon(
+          icon,
+          color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+          size: 22,
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+          ),
         ),
       ),
     );
