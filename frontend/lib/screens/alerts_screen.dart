@@ -6,7 +6,7 @@ import '../models/alert_model.dart';
 import '../providers/weather_provider.dart';
 import '../services/alert_service.dart';
 import '../widgets/gemini_sparkle_icon.dart';
-import 'map_screen.dart';
+import 'radar_map_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});

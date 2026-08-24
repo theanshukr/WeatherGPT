@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme/app_colors.dart';
-import '../widgets/ios_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 import '../services/supabase_service.dart';
 import 'onboarding_screen.dart';
 import 'main_navigation_screen.dart';
@@ -80,30 +80,27 @@ class _SplashScreenState extends State<SplashScreen> {
                   children: [
                     const Spacer(flex: 3),
 
-                    // Radiant 3D Glowing Orb Icon
+                    // WeatherGPT Brand Icon
                     Container(
-                      width: 82,
-                      height: 82,
+                      width: 90,
+                      height: 90,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF7C3AED), Color(0xFFEC4899), Color(0xFF38BDF8)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        borderRadius: BorderRadius.circular(26),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
-                            blurRadius: 30,
-                            spreadRadius: 4,
+                            color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                            blurRadius: 28,
+                            spreadRadius: 2,
                           ),
                         ],
                       ),
-                      child: const Center(
-                        child: IosSvgIcon(
-                          'sparkles',
-                          size: 38,
-                          color: Colors.white,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(26),
+                        child: Image.asset(
+                          'assets/images/app_logo.png',
+                          width: 90,
+                          height: 90,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ).animate().scale(duration: 650.ms, curve: Curves.easeOutBack),

@@ -1,4 +1,4 @@
-import '../models/chat_message.dart';
+import '../models/chat_message_model.dart';
 import 'api_client.dart';
 import '../core/constants/api_constants.dart';
 

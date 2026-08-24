@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
-import 'map_screen.dart';
-import 'profile_context_screen.dart';
+import 'radar_map_screen.dart';
+import 'profile_screen.dart';
 import '../widgets/glowing_bottom_bar.dart';
 
 class MainNavigationScreen extends StatefulWidget {

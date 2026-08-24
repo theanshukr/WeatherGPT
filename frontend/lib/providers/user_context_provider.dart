@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/user_context.dart';
+import '../models/user_context_model.dart';
 
 class UserContextProvider with ChangeNotifier {
   UserContext _userContext = UserContext.defaultContext();

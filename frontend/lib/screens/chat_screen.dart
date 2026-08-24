@@ -3,13 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
-import '../models/chat_message.dart';
+import '../models/chat_message_model.dart';
 import '../providers/chat_provider.dart';
 import '../providers/weather_provider.dart';
 import '../providers/user_context_provider.dart';
 import '../widgets/chat_message_view.dart';
-import '../widgets/ios_svg_icon.dart';
-import '../widgets/ios_bouncing_button.dart';
+import '../widgets/svg_icon.dart';
+import '../widgets/bouncing_button.dart';
 import 'gemini_live_screen.dart';
 import 'settings_screen.dart';
 

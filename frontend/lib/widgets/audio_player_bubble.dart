@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'ios_svg_icon.dart';
-import 'ios_bouncing_button.dart';
+import 'svg_icon.dart';
+import 'bouncing_button.dart';
 
 class IosAudioPlayerBubble extends StatefulWidget {
   final VoidCallback? onPlayToggle;

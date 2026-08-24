@@ -20,6 +20,8 @@ frontend/build/
 
 # Archives & Temporary files
 *.zip
+!backend.zip
+!frontend.zip
 *.tar.gz
 *.rar
 

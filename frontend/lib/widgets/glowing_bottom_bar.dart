@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme/app_colors.dart';
-import 'ios_svg_icon.dart';
-import 'ios_bouncing_button.dart';
+import 'svg_icon.dart';
+import 'bouncing_button.dart';
 
 class GlowingBottomBar extends StatelessWidget {
   final int selectedIndex;

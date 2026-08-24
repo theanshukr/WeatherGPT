@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/models/weather_model.dart';
-import 'package:frontend/models/user_context.dart';
+import 'package:frontend/models/user_context_model.dart';
 import 'package:frontend/providers/theme_provider.dart';
 import 'package:frontend/providers/user_context_provider.dart';
 

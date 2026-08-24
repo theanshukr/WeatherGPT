@@ -12,7 +12,38 @@ class LocationService {
   /// Instant access to the last resolved high-precision location
   static WeatherLocation? get currentCachedLocation => _cachedLocation;
 
-  // Resolves exact, high-precision GPS coordinates and requests permissions dynamically
+  /// Instant hardware GPS position query (zero network blocking)
+  Future<Position?> getRawDevicePosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        // 1. Try last known position for instant 0ms response
+        Position? position = await Geolocator.getLastKnownPosition();
+        if (position != null) return position;
+
+        // 2. Fetch fresh high-accuracy position
+        if (serviceEnabled) {
+          return await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Direct GPS retrieval error: $e');
+    }
+    return null;
+  }
+
+  // Resolves exact, high-precision GPS coordinates
   Future<WeatherLocation> getCurrentLocation({bool forceRefresh = false}) async {
     // Return cached if fresh (under 3 minutes) unless forced
     if (!forceRefresh &&
@@ -23,60 +54,23 @@ class LocationService {
     }
 
     try {
-      // 1. Test if location services are enabled on device
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      LocationPermission permission = await Geolocator.checkPermission();
+      final position = await getRawDevicePosition();
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+      if (position != null) {
+        // Reverse geocode to get exact city/neighborhood name
+        final cityName = await _reverseGeocode(position.latitude, position.longitude);
 
-      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        Position? position;
+        final resolved = WeatherLocation(
+          name: cityName.isNotEmpty ? cityName : 'My Location',
+          state: 'India',
+          latitude: position.latitude,
+          longitude: position.longitude,
+          country: 'India',
+        );
 
-        if (serviceEnabled) {
-          try {
-            // High-precision GPS query for exact location
-            position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 6),
-              ),
-            );
-          } catch (e) {
-            debugPrint('High precision GPS timeout, attempting medium accuracy: $e');
-            try {
-              position = await Geolocator.getCurrentPosition(
-                locationSettings: const LocationSettings(
-                  accuracy: LocationAccuracy.medium,
-                  timeLimit: Duration(seconds: 4),
-                ),
-              );
-            } catch (_) {
-              // Try last known as fallback
-              position = await Geolocator.getLastKnownPosition();
-            }
-          }
-        } else {
-          position = await Geolocator.getLastKnownPosition();
-        }
-
-        if (position != null) {
-          // Reverse geocode to get exact city/neighborhood name
-          final cityName = await _reverseGeocode(position.latitude, position.longitude);
-
-          final resolved = WeatherLocation(
-            name: cityName.isNotEmpty ? cityName : 'My Location',
-            state: 'India',
-            latitude: position.latitude,
-            longitude: position.longitude,
-            country: 'India',
-          );
-
-          _cachedLocation = resolved;
-          _lastFetchedTime = DateTime.now();
-          return resolved;
-        }
+        _cachedLocation = resolved;
+        _lastFetchedTime = DateTime.now();
+        return resolved;
       }
     } catch (e) {
       debugPrint('GPS location retrieval error: $e');

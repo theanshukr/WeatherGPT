@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/user_context.dart';
+import '../models/user_context_model.dart';
 import '../core/theme/app_colors.dart';
 
 class ContextBadge extends StatelessWidget {

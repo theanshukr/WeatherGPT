@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_colors.dart';
-import '../widgets/ios_svg_icon.dart';
-import '../widgets/ios_bouncing_button.dart';
+import '../widgets/svg_icon.dart';
+import '../widgets/bouncing_button.dart';
 import 'auth_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {

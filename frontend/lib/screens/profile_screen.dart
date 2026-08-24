@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
-import '../models/user_context.dart';
+import '../models/user_context_model.dart';
 import '../models/alert_model.dart';
 import '../providers/user_context_provider.dart';
 import '../providers/weather_provider.dart';
@@ -10,15 +10,18 @@ import '../services/alert_service.dart';
 import '../widgets/gemini_sparkle_icon.dart';
 import 'alerts_screen.dart';
 
-class ProfileContextScreen extends StatefulWidget {
+class ProfileScreen extends StatefulWidget {
   final bool isStandalone;
-  const ProfileContextScreen({super.key, this.isStandalone = false});
+  const ProfileScreen({super.key, this.isStandalone = false});
 
   @override
-  State<ProfileContextScreen> createState() => _ProfileContextScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileContextScreenState extends State<ProfileContextScreen> {
+// Backward-compatible alias
+typedef ProfileContextScreen = ProfileScreen;
+
+class _ProfileScreenState extends State<ProfileScreen> {
   final AlertService _alertService = AlertService();
   List<WeatherAlert> _recentAlerts = [];
   bool _alertsLoading = true;

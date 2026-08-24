@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import '../models/chat_message.dart';
+import '../models/chat_message_model.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/voice_provider.dart';
-import 'ios_svg_icon.dart';
-import 'ios_bouncing_button.dart';
-import 'ios_audio_player_bubble.dart';
+import 'svg_icon.dart';
+import 'bouncing_button.dart';
+import 'audio_player_bubble.dart';
 
 class ChatMessageView extends StatefulWidget {
   final ChatMessage message;

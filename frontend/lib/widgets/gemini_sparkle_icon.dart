@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ios_svg_icon.dart';
+import 'svg_icon.dart';
 
 class IosSparkleIcon extends StatelessWidget {
   final double size;

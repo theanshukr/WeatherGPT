@@ -9,9 +9,9 @@ import '../providers/chat_provider.dart';
 import '../providers/voice_provider.dart';
 import '../providers/weather_provider.dart';
 import '../providers/user_context_provider.dart';
-import '../widgets/ios_svg_icon.dart';
-import '../widgets/ios_bouncing_button.dart';
-import '../widgets/ios_voice_orb_3d.dart';
+import '../widgets/svg_icon.dart';
+import '../widgets/bouncing_button.dart';
+import '../widgets/voice_orb_widget.dart';
 import 'chat_screen.dart';
 
 enum GeminiLiveState {
