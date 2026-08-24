@@ -74,7 +74,7 @@ WeatherGPT/
 │   │   ├── api/
 │   │   ├── core/
 │   │   ├── models/
-│   │   ├── sche mas/
+│   │   ├── schemas/
 │   │   ├── services/
 │   │   ├── integrations/
 │   │   ├── database/

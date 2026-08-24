@@ -60,36 +60,77 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     if (mounted) setState(() => _isLoading = false);
   }
 
-  /// Proper Auth Login using the designated Testing Account
+  /// Proper Auth Login using the designated Testing Account.
+  ///
+  /// Retries sign-in for transient errors and only falls back to sign-up
+  /// when Supabase explicitly says the credentials are invalid (meaning the
+  /// user was never created).  This avoids burning the free-tier SMTP email
+  /// quota on every retry.
   Future<void> _handleTestAccountLogin() async {
     _loginEmailController.text = testEmail;
     _loginPasswordController.text = testPassword;
     setState(() => _isLoading = true);
 
     try {
-      // 1. Try Signing in with the test account
-      await SupabaseService.signInWithEmail(email: testEmail, password: testPassword);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Logged in successfully with Testing Account!'),
-            backgroundColor: AppColors.emeraldNeon,
-          ),
-        );
+      // 1. Attempt sign-in with retry for transient/network errors
+      AuthException? lastAuthErr;
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try {
+          await SupabaseService.signInWithEmail(
+            email: testEmail,
+            password: testPassword,
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Logged in successfully with Testing Account!'),
+                backgroundColor: AppColors.emeraldNeon,
+              ),
+            );
+          }
+          _navigateToHome();
+          return; // success — exit early
+        } on AuthException catch (e) {
+          lastAuthErr = e;
+          // "invalid_credentials" means the user doesn't exist yet — no point retrying
+          if (e.statusCode == '400') break;
+          // Rate-limit — surface immediately, don't retry
+          if (e.statusCode == '429') break;
+          // Transient error — wait briefly then retry
+          await Future.delayed(const Duration(milliseconds: 800));
+        } catch (_) {
+          // Network / timeout — wait briefly then retry
+          await Future.delayed(const Duration(milliseconds: 800));
+        }
       }
-      _navigateToHome();
-    } catch (e) {
-      // 2. If test user sign in fails, create verified user and sign in
-      try {
-        await SupabaseService.signUpWithEmail(email: testEmail, password: testPassword);
-        _navigateToHome();
-      } catch (signupErr) {
+
+      // 2. Only attempt sign-up if the user genuinely doesn't exist
+      if (lastAuthErr != null && lastAuthErr.statusCode == '400') {
+        try {
+          await SupabaseService.signUpWithEmail(
+            email: testEmail,
+            password: testPassword,
+          );
+          _navigateToHome();
+          return;
+        } catch (signupErr) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Test account setup failed: $signupErr'),
+                backgroundColor: AppColors.alertCrimson,
+              ),
+            );
+          }
+        }
+      } else {
+        // Rate-limit or network error — show a helpful message
+        final msg = lastAuthErr != null
+            ? 'Supabase auth error: ${lastAuthErr.message}'
+            : 'Could not reach Supabase. Check your internet connection.';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Test login error: $signupErr'),
-              backgroundColor: AppColors.alertCrimson,
-            ),
+            SnackBar(content: Text(msg), backgroundColor: AppColors.alertCrimson),
           );
         }
       }

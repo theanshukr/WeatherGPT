@@ -49,7 +49,9 @@ class SupabaseService {
     );
   }
 
-  // Email / Password Sign Up with automated direct bypass for SMTP email rate limits
+  // Email / Password Sign Up — uses backend direct registration to avoid
+  // Supabase free-tier SMTP email rate limits.  Does NOT fall back to
+  // client.auth.signUp() which would send a confirmation email.
   static Future<AuthResponse> signUpWithEmail({
     required String email,
     required String password,
@@ -71,32 +73,25 @@ class SupabaseService {
       ).timeout(const Duration(seconds: 8));
 
       if (regRes.statusCode == 200) {
+        // Backend created & verified the user — now sign in normally
         return await client.auth.signInWithPassword(
           email: email,
           password: password,
         );
       }
-    } catch (_) {
-      // Backend unreachable or timeout, fallback to Supabase direct API
-    }
 
-    // Attempt 2: Standard Supabase client signup
-    try {
-      final response = await client.auth.signUp(
-        email: email,
-        password: password,
+      // Backend returned an error (e.g. 500 DB unreachable).
+      // Surface a clear message instead of silently falling back to signUp().
+      final detail = regRes.body.isNotEmpty ? regRes.body : 'Unknown error';
+      throw Exception(
+        'Backend registration returned ${regRes.statusCode}: $detail. '
+        'Ensure the backend server is running and its database is reachable.',
       );
-
-      if (response.session != null) {
-        return response;
-      }
-
-      return await client.auth.signInWithPassword(
-        email: email,
-        password: password,
+    } on http.ClientException catch (e) {
+      throw Exception(
+        'Could not reach the backend server for registration. '
+        'Check your connection and try again. ($e)',
       );
-    } catch (e) {
-      rethrow;
     }
   }
 
