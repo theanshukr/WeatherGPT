@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
 import '../core/theme/app_colors.dart';
 import '../models/alert_model.dart';
 import '../services/alert_service.dart';
 import '../services/location_service.dart';
+import '../services/radar_service.dart';
 import '../widgets/ios_svg_icon.dart';
 import '../widgets/ios_bouncing_button.dart';
 
@@ -23,6 +26,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   final AlertService _alertService = AlertService();
   final LocationService _locationService = LocationService();
+  final RadarService _radarService = RadarService();
 
   LatLng _userLocation = const LatLng(28.6139, 77.2090);
   String _currentCityName = 'Resolving GPS...';
@@ -30,9 +34,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   WeatherAlert? _selectedAlert;
   bool _isLoading = true;
   String _selectedFilter = 'All Hazards';
+
+  // Real Doppler Radar Timeline Data
+  RadarTimelineData? _radarData;
+  int _activeRadarFrameIndex = 2; // Default to LIVE
   bool _isPlayingRadar = true;
-  int _activeRadarFrame = 2; // 0: -30m, 1: -15m, 2: Live, 3: +15m, 4: +30m
-  Timer? _radarTimer;
+  Timer? _radarPlaybackTimer;
+
+  // Real-time Precision Telemetry at exact user coordinates
+  Map<String, dynamic> _precisionWeather = {};
+  bool _showTelemetryCard = true;
 
   late AnimationController _pulseController;
   late AnimationController _sweepController;
@@ -40,9 +51,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2400),
     )..repeat(reverse: true);
 
     _sweepController = AnimationController(
@@ -50,61 +62,84 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 4),
     )..repeat();
 
-    _startRadarPlayback();
     _loadData();
-  }
-
-  void _startRadarPlayback() {
-    _radarTimer?.cancel();
-    _radarTimer = Timer.periodic(const Duration(milliseconds: 1400), (timer) {
-      if (_isPlayingRadar && mounted) {
-        setState(() {
-          _activeRadarFrame = (_activeRadarFrame + 1) % 5;
-        });
-      }
-    });
+    _loadRealRadarTimeline();
   }
 
   @override
   void dispose() {
-    _radarTimer?.cancel();
+    _radarPlaybackTimer?.cancel();
     _pulseController.dispose();
     _sweepController.dispose();
     super.dispose();
   }
 
+  void _startRadarPlayback() {
+    _radarPlaybackTimer?.cancel();
+    final framesCount = _radarData?.frames.length ?? 5;
+    _radarPlaybackTimer = Timer.periodic(const Duration(milliseconds: 1600), (timer) {
+      if (_isPlayingRadar && mounted && (_radarData?.frames.isNotEmpty ?? false)) {
+        setState(() {
+          _activeRadarFrameIndex = (_activeRadarFrameIndex + 1) % framesCount;
+        });
+      }
+    });
+  }
+
+  Future<void> _loadRealRadarTimeline() async {
+    try {
+      final data = await _radarService.getRadarTimeline();
+      if (mounted && data != null && data.frames.isNotEmpty) {
+        setState(() {
+          _radarData = data;
+          _activeRadarFrameIndex = data.defaultLiveIndex.clamp(0, data.frames.length - 1);
+        });
+        _startRadarPlayback();
+      }
+    } catch (e) {
+      debugPrint('Error initializing Doppler radar tiles: $e');
+    }
+  }
+
   Future<void> _loadData() async {
     try {
-      final loc = await _locationService.getCurrentLocation();
+      // 1. High-precision live GPS coordinates
+      final loc = await _locationService.getCurrentLocation(forceRefresh: true);
       final userLatLng = LatLng(loc.latitude, loc.longitude);
 
-      final alerts = await _alertService.getAllAlerts(
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        country: 'India',
-      );
+      // 2. Fetch real weather alerts & real precision telemetry concurrently
+      final results = await Future.wait([
+        _alertService.getAllAlerts(
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          city: loc.name,
+          country: 'India',
+        ),
+        _fetchPrecisionWeather(loc.latitude, loc.longitude),
+      ]);
 
-      final enrichedAlerts = _enrichNearbyHazards(loc.latitude, loc.longitude, alerts);
+      final realAlerts = results[0] as List<WeatherAlert>;
+      final precision = results[1] as Map<String, dynamic>;
 
       if (mounted) {
         setState(() {
           _userLocation = userLatLng;
           _currentCityName = loc.name;
-          _alerts = enrichedAlerts;
+          _alerts = realAlerts;
+          _precisionWeather = precision;
           _isLoading = false;
         });
 
-        // Center map camera on the live location smoothly
+        // Center map smoothly on exact live GPS location
         WidgetsBinding.instance.addPostFrameCallback((_) {
           try {
-            _mapController.move(userLatLng, 10.5);
+            _mapController.move(userLatLng, 11.0);
           } catch (_) {}
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _alerts = _generateDefaultNearbyHazards(_userLocation.latitude, _userLocation.longitude);
           _isLoading = false;
           _currentCityName = 'Live Location';
         });
@@ -112,106 +147,88 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  List<WeatherAlert> _enrichNearbyHazards(double lat, double lon, List<WeatherAlert> original) {
-    final now = DateTime.now();
-    final list = List<WeatherAlert>.from(original);
+  Future<Map<String, dynamic>> _fetchPrecisionWeather(double lat, double lon) async {
+    try {
+      final url = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_gusts_10m,uv_index,is_day&hourly=precipitation_probability&timezone=auto',
+      );
+      final res = await http.get(url).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final current = data['current'] ?? {};
+        final hourly = data['hourly'] ?? {};
+        final probs = (hourly['precipitation_probability'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList() ?? [];
+        final rainProb = probs.isNotEmpty ? probs.first : 0.0;
 
-    bool hasRain = list.any((a) => a.title.toLowerCase().contains('rain'));
-    bool hasFlood = list.any((a) => a.title.toLowerCase().contains('flood'));
-    bool hasStorm = list.any((a) => a.title.toLowerCase().contains('storm'));
-
-    if (!hasFlood) {
-      list.add(WeatherAlert(
-        id: 'nearby_flood_risk',
-        title: 'Waterlogging & Flood Risk',
-        description: 'Low-lying drainage channels are nearing maximum capacity.',
-        instructions: 'Avoid waterlogged underpasses and subways.',
-        severity: AlertSeverity.warning,
-        area: 'River Basin & Catchment (8 km)',
-        latitude: lat + 0.045,
-        longitude: lon - 0.035,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 6)),
-        source: 'radar_gis',
-      ));
+        return {
+          'temp': (current['temperature_2m'] as num?)?.toDouble() ?? 28.0,
+          'feels_like': (current['apparent_temperature'] as num?)?.toDouble() ?? 29.0,
+          'rain_mm': (current['precipitation'] as num?)?.toDouble() ?? 0.0,
+          'rain_prob': rainProb,
+          'wind_speed': (current['wind_speed_10m'] as num?)?.toDouble() ?? 12.0,
+          'wind_gusts': (current['wind_gusts_10m'] as num?)?.toDouble() ?? 16.0,
+          'humidity': (current['relative_humidity_2m'] as num?)?.toInt() ?? 60,
+          'uv_index': (current['uv_index'] as num?)?.toDouble() ?? 5.0,
+          'weather_code': current['weather_code'] as int? ?? 0,
+          'is_day': current['is_day'] as int? ?? 1,
+        };
+      }
+    } catch (e) {
+      debugPrint('Precision telemetry fetch error: $e');
     }
 
-    if (!hasRain) {
-      list.add(WeatherAlert(
-        id: 'nearby_heavy_rain',
-        title: 'Heavy Precipitation Cell',
-        description: 'Doppler radar reflectivity indicates 30-45 mm/h localized rainfall.',
-        instructions: 'Carry rain protection and reduce vehicle speed.',
-        severity: AlertSeverity.warning,
-        area: 'Urban Corridor (4 km)',
-        latitude: lat - 0.032,
-        longitude: lon + 0.042,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 3)),
-        source: 'radar_gis',
-      ));
-    }
-
-    if (!hasStorm) {
-      list.add(WeatherAlert(
-        id: 'nearby_thunderstorm',
-        title: 'Severe Convective Thunderstorm',
-        description: 'High lightning frequency and wind gusts up to 45 km/h.',
-        instructions: 'Seek indoor shelter. Stay clear of tall metallic structures.',
-        severity: AlertSeverity.watch,
-        area: 'Metro Sector (9 km)',
-        latitude: lat + 0.052,
-        longitude: lon + 0.048,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 4)),
-        source: 'radar_gis',
-      ));
-    }
-
-    return list;
+    return {
+      'temp': 28.0,
+      'feels_like': 29.0,
+      'rain_mm': 0.0,
+      'rain_prob': 0.0,
+      'wind_speed': 10.0,
+      'wind_gusts': 14.0,
+      'humidity': 55,
+      'uv_index': 5.0,
+      'weather_code': 0,
+      'is_day': 1,
+    };
   }
 
-  List<WeatherAlert> _generateDefaultNearbyHazards(double lat, double lon) {
-    final now = DateTime.now();
-    return [
-      WeatherAlert(
-        id: 'flood_def',
-        title: 'Waterlogging & Inundation Watch',
-        description: 'Elevated precipitation intensity in low-lying sectors.',
-        instructions: 'Avoid underpasses and keep emergency lines handy.',
-        severity: AlertSeverity.warning,
-        area: 'Nearby Basin',
-        latitude: lat + 0.04,
-        longitude: lon - 0.03,
-        startsAt: now,
-        expiresAt: now.add(const Duration(hours: 6)),
-        source: 'radar_gis',
-      ),
-    ];
+  String _getWeatherConditionDescription(int code) {
+    if (code == 0) return 'Clear Sky';
+    if (code == 1 || code == 2) return 'Partly Cloudy';
+    if (code == 3) return 'Overcast';
+    if (code >= 45 && code <= 48) return 'Foggy';
+    if (code >= 51 && code <= 55) return 'Drizzle';
+    if (code >= 61 && code <= 65) return 'Rain Showers';
+    if (code >= 71 && code <= 77) return 'Snow';
+    if (code >= 80 && code <= 82) return 'Heavy Rain';
+    if (code >= 95 && code <= 99) return 'Thunderstorm';
+    return 'Clear';
   }
 
   List<WeatherAlert> get _filteredAlerts {
+    // Only real alerts matching the filter
+    final validAlerts = _alerts.where((a) => a.id != 'telemetry_status').toList();
+
     if (_selectedFilter == '🌊 Flood & Rain') {
-      return _alerts.where((a) {
+      return validAlerts.where((a) {
         final t = a.title.toLowerCase();
         return t.contains('flood') || t.contains('rain') || t.contains('shower');
       }).toList();
     } else if (_selectedFilter == '⚡ Severe Storms') {
-      return _alerts.where((a) {
+      return validAlerts.where((a) {
         final t = a.title.toLowerCase();
         return t.contains('storm') || t.contains('lightning') || t.contains('thunder');
       }).toList();
     } else if (_selectedFilter == '🌡️ Heat & Wind') {
-      return _alerts.where((a) {
+      return validAlerts.where((a) {
         final t = a.title.toLowerCase();
         return t.contains('heat') || t.contains('wind') || t.contains('uv');
       }).toList();
     }
-    return _alerts;
+    return validAlerts;
   }
 
   void _recenter() {
-    _mapController.move(_userLocation, 10.5);
+    _mapController.move(_userLocation, 11.0);
   }
 
   void _zoomIn() {
@@ -242,21 +259,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return 'bell';
   }
 
+  RadarFrame? get _activeRadarFrame {
+    if (_radarData == null || _radarData!.frames.isEmpty) return null;
+    final index = _activeRadarFrameIndex.clamp(0, _radarData!.frames.length - 1);
+    return _radarData!.frames[index];
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final displayAlerts = _filteredAlerts;
+    final activeFrame = _activeRadarFrame;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF4F3F8),
       body: Stack(
         children: [
-          // 1. High-Performance Interactive CartoDB GIS Basemap
+          // 1. High-Performance Real Basemap & Live Doppler Radar Layer
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _userLocation,
-              initialZoom: 10.5,
+              initialZoom: 11.0,
               minZoom: 4.0,
               maxZoom: 18.0,
               interactionOptions: const InteractionOptions(
@@ -264,7 +288,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
             children: [
-              // Sleek, Clean Tile Layer (Dark Matter / Positron Voyager)
+              // Base Map (CartoDB Dark Matter / Positron Voyager)
               TileLayer(
                 urlTemplate: isDark
                     ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
@@ -274,19 +298,32 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 maxZoom: 19,
               ),
 
-              // Realistic Multi-Stop Soft Gradient Radar Precipitation Layer
-              CircleLayer(
-                circles: _buildRealisticRadarCircles(displayAlerts),
-              ),
+              // 100% Real Live Doppler Radar Tiles from RainViewer Global Radar Network
+              if (activeFrame != null && activeFrame.path.isNotEmpty)
+                TileLayer(
+                  key: ValueKey('radar_${activeFrame.path}'),
+                  urlTemplate: activeFrame.getTileUrlTemplate(
+                    host: _radarData?.host ?? 'https://tilecache.rainviewer.com',
+                    colorScheme: 2, // Standard Doppler Weather Radar Scheme
+                  ),
+                  userAgentPackageName: 'com.weathergpt.app',
+                  tileProvider: NetworkTileProvider(),
+                  tileBuilder: (context, tileWidget, tile) {
+                    return Opacity(
+                      opacity: 0.72,
+                      child: tileWidget,
+                    );
+                  },
+                ),
 
-              // Markers Layer: Live User Beacon & Sleek Glass Hazard Pins
+              // Markers Layer: Live Precision User Beacon & Real Hazard Pins
               MarkerLayer(
                 markers: [
-                  // Sleek Apple-Style Live Location Puck with Animated Halo
+                  // High-Precision Apple/Google Maps-Style Pulsing User Location Beacon
                   Marker(
                     point: _userLocation,
-                    width: 70,
-                    height: 70,
+                    width: 80,
+                    height: 80,
                     child: Center(
                       child: AnimatedBuilder(
                         animation: _pulseController,
@@ -295,25 +332,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           return Stack(
                             alignment: Alignment.center,
                             children: [
-                              // Outer expanding pulse aura
+                              // Outer expanding radar pulse aura
                               Container(
-                                width: 28 + (pulse * 32),
-                                height: 28 + (pulse * 32),
+                                width: 32 + (pulse * 40),
+                                height: 32 + (pulse * 40),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.28 * (1.0 - pulse)),
+                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.22 * (1.0 - pulse)),
                                 ),
                               ),
-                              // Middle glow ring
+                              // Middle accuracy ring
                               Container(
-                                width: 26,
-                                height: 26,
+                                width: 30,
+                                height: 30,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
+                                  border: Border.all(
+                                    color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
+                                    width: 1,
+                                  ),
                                 ),
                               ),
-                              // Core solid beacon
+                              // Core solid precision beacon
                               Container(
                                 width: 16,
                                 height: 16,
@@ -325,6 +366,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                     BoxShadow(
                                       color: const Color(0xFF7C3AED).withValues(alpha: 0.6),
                                       blurRadius: 10,
+                                      spreadRadius: 1,
                                     ),
                                   ],
                                 ),
@@ -336,7 +378,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     ),
                   ),
 
-                  // Sleek Floating Hazard Badges
+                  // Real Active Weather Hazard Pins (Only genuine alerts)
                   ...displayAlerts.where((a) => a.latitude != 0.0 && a.longitude != 0.0).map((alert) {
                     final markerColor = _getHazardColor(alert);
                     final iconName = _getHazardIcon(alert);
@@ -403,7 +445,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
 
-          // 3. Top Header Bar & Category Chips (Clean, Non-Overlapping Layout)
+          // 3. Top Header Bar & Real Category Chips
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -477,9 +519,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               Container(
                                 width: 7,
                                 height: 7,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Color(0xFF10B981),
+                                  color: _isLoading ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -499,7 +541,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         ),
                       ),
 
-                      // GPS Recenter Button
+                      // GPS Recenter Button (Snaps to exact user GPS)
                       IosBouncingButton(
                         onTap: _recenter,
                         child: Container(
@@ -534,7 +576,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
                   const SizedBox(height: 10),
 
-                  // Horizontal Hazard Category Chips Bar (No overlapping)
+                  // Horizontal Hazard Category Chips Bar
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
@@ -555,7 +597,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // 4. Right Side Floating Zoom & Playback Controls
+          // 4. Right Side Floating Zoom, Telemetry Toggle & Playback Controls
           Positioned(
             right: 16,
             top: 135,
@@ -563,7 +605,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               children: [
                 // Radar Live Play/Pause
                 IosBouncingButton(
-                  onTap: () => setState(() => _isPlayingRadar = !_isPlayingRadar),
+                  onTap: () {
+                    setState(() {
+                      _isPlayingRadar = !_isPlayingRadar;
+                      if (_isPlayingRadar) _startRadarPlayback();
+                    });
+                  },
                   child: Container(
                     width: 40,
                     height: 40,
@@ -587,6 +634,40 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         _isPlayingRadar ? 'pause' : 'play',
                         size: 16,
                         color: const Color(0xFF7C3AED),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Precision Telemetry HUD Toggle
+                IosBouncingButton(
+                  onTap: () => setState(() => _showTelemetryCard = !_showTelemetryCard),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _showTelemetryCard
+                            ? const Color(0xFF7C3AED)
+                            : (isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3)),
+                        width: _showTelemetryCard ? 1.5 : 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.thermostat_rounded,
+                        size: 19,
+                        color: _showTelemetryCard ? const Color(0xFF7C3AED) : const Color(0xFF6B7280),
                       ),
                     ),
                   ),
@@ -634,7 +715,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // 5. Bottom Radar Timeline Bar & Selected Hazard Card
+          // 5. Bottom Real Radar Timeline Bar & Precision Weather Telemetry HUD
           Positioned(
             left: 16,
             right: 16,
@@ -642,14 +723,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Selected Hazard Alert Card
+                // Selected Hazard Alert Card (if tapped)
                 if (_selectedAlert != null) ...[
                   _buildSelectedAlertBanner(_selectedAlert!, isDark),
                   const SizedBox(height: 10),
                 ],
 
-                // Radar Timeline Scrubber Bar
-                _buildRadarScrubber(isDark),
+                // Real-Time Precision Location Weather Telemetry Card
+                if (_showTelemetryCard && _selectedAlert == null && _precisionWeather.isNotEmpty) ...[
+                  _buildPrecisionTelemetryCard(isDark),
+                  const SizedBox(height: 10),
+                ],
+
+                // Real Doppler Radar Timeline Scrubber Bar (-30m to +30m)
+                _buildRealRadarScrubber(isDark),
               ],
             ),
           ),
@@ -658,57 +745,179 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Generates realistic soft, translucent radar precipitation cells
-  List<CircleMarker> _buildRealisticRadarCircles(List<WeatherAlert> displayAlerts) {
-    final circles = <CircleMarker>[];
-    final offsetMultiplier = (_activeRadarFrame - 2) * 0.008;
+  /// Glassmorphic HUD showing exact precision weather metrics at live location
+  Widget _buildPrecisionTelemetryCard(bool isDark) {
+    final temp = (_precisionWeather['temp'] as num?)?.toDouble() ?? 28.0;
+    final feelsLike = (_precisionWeather['feels_like'] as num?)?.toDouble() ?? 29.0;
+    final rainMm = (_precisionWeather['rain_mm'] as num?)?.toDouble() ?? 0.0;
+    final rainProb = (_precisionWeather['rain_prob'] as num?)?.toDouble() ?? 0.0;
+    final windSpeed = (_precisionWeather['wind_speed'] as num?)?.toDouble() ?? 10.0;
+    final humidity = (_precisionWeather['humidity'] as num?)?.toInt() ?? 60;
+    final weatherCode = _precisionWeather['weather_code'] as int? ?? 0;
+    final conditionDesc = _getWeatherConditionDescription(weatherCode);
 
-    for (final alert in displayAlerts) {
-      if (alert.latitude == 0.0 || alert.longitude == 0.0) continue;
-
-      final centerLat = alert.latitude + offsetMultiplier;
-      final centerLon = alert.longitude + offsetMultiplier;
-      final isStorm = alert.title.toLowerCase().contains('storm') || alert.title.toLowerCase().contains('lightning');
-      final isFlood = alert.title.toLowerCase().contains('flood');
-
-      // Outer light rain zone (smooth soft emerald/cyan)
-      circles.add(
-        CircleMarker(
-          point: LatLng(centerLat, centerLon),
-          radius: isStorm ? 22000.0 : 16000.0,
-          useRadiusInMeter: true,
-          color: const Color(0xFF10B981).withValues(alpha: 0.12),
-          borderColor: Colors.transparent,
-          borderStrokeWidth: 0,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+          width: 1.2,
         ),
-      );
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header: Location Name & Exact Condition
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: IosSvgIcon(
+                        rainMm > 0 ? 'cloud_rain' : (weatherCode == 0 ? 'sun' : 'cloud'),
+                        size: 17,
+                        color: const Color(0xFF7C3AED),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _currentCityName,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                        ),
+                      ),
+                      Text(
+                        '$conditionDesc • Feels ${feelsLike.round()}°C',
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              // Temperature badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${temp.round()}°C',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF7C3AED),
+                  ),
+                ),
+              ),
+            ],
+          ),
 
-      // Moderate rain zone (smooth blue)
-      circles.add(
-        CircleMarker(
-          point: LatLng(centerLat, centerLon),
-          radius: isStorm ? 14000.0 : 10000.0,
-          useRadiusInMeter: true,
-          color: const Color(0xFF3B82F6).withValues(alpha: 0.18),
-          borderColor: Colors.transparent,
-          borderStrokeWidth: 0,
+          const SizedBox(height: 10),
+
+          // Telemetry Pills Row: Rain mm, Rain %, Wind, Humidity
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildTelemetryMetric(
+                label: 'Precipitation',
+                value: rainMm > 0 ? '${rainMm.toStringAsFixed(1)} mm/h' : '${rainProb.round()}% prob',
+                icon: Icons.water_drop_rounded,
+                color: const Color(0xFF3B82F6),
+                isDark: isDark,
+              ),
+              _buildTelemetryMetric(
+                label: 'Wind Gusts',
+                value: '${windSpeed.round()} km/h',
+                icon: Icons.air_rounded,
+                color: const Color(0xFF10B981),
+                isDark: isDark,
+              ),
+              _buildTelemetryMetric(
+                label: 'Humidity',
+                value: '$humidity%',
+                icon: Icons.opacity_rounded,
+                color: const Color(0xFF8B5CF6),
+                isDark: isDark,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.08, end: 0);
+  }
+
+  Widget _buildTelemetryMetric({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF221F2E) : const Color(0xFFF7F6FB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2E2B3D) : const Color(0xFFECEAF3),
+          width: 0.8,
         ),
-      );
-
-      // Core heavy rain/storm cell (vibrant violet/amber)
-      circles.add(
-        CircleMarker(
-          point: LatLng(centerLat, centerLon),
-          radius: isStorm ? 7000.0 : (isFlood ? 6000.0 : 4500.0),
-          useRadiusInMeter: true,
-          color: (isStorm ? const Color(0xFF9333EA) : const Color(0xFFF59E0B)).withValues(alpha: 0.28),
-          borderColor: Colors.transparent,
-          borderStrokeWidth: 0,
-        ),
-      );
-    }
-
-    return circles;
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                ),
+              ),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 9.5,
+                  color: isDark ? AppColors.darkTextTertiary : const Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFilterChip(String label, bool isDark) {
@@ -757,11 +966,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildRadarScrubber(bool isDark) {
-    final frames = ['-30m', '-15m', 'LIVE', '+15m', '+30m'];
+  /// Real Doppler Radar Timeline Scrubber Bar
+  Widget _buildRealRadarScrubber(bool isDark) {
+    final frames = _radarData?.frames ?? [
+      const RadarFrame(time: 0, path: '', label: '-30m'),
+      const RadarFrame(time: 0, path: '', label: '-15m'),
+      const RadarFrame(time: 0, path: '', label: 'LIVE', isLive: true),
+      const RadarFrame(time: 0, path: '', label: '+15m', isNowcast: true),
+      const RadarFrame(time: 0, path: '', label: '+30m', isNowcast: true),
+    ];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -779,14 +995,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(frames.length, (index) {
-          final isSelected = _activeRadarFrame == index;
-          final isLive = frames[index] == 'LIVE';
+          final frame = frames[index];
+          final isSelected = _activeRadarFrameIndex == index;
+          final isLive = frame.isLive;
+          final isNowcast = frame.isNowcast;
 
           return IosBouncingButton(
             onTap: () {
               setState(() {
-                _activeRadarFrame = index;
+                _activeRadarFrameIndex = index;
                 _isPlayingRadar = false;
+                _radarPlaybackTimer?.cancel();
               });
             },
             child: AnimatedContainer(
@@ -794,7 +1013,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? (isLive ? const Color(0xFF10B981) : const Color(0xFF7C3AED))
+                    ? (isLive
+                        ? const Color(0xFF10B981)
+                        : (isNowcast ? const Color(0xFF38BDF8) : const Color(0xFF7C3AED)))
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -813,7 +1034,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     const SizedBox(width: 4),
                   ],
                   Text(
-                    frames[index],
+                    frame.label,
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -931,8 +1152,8 @@ class _RadarSweepPainter extends CustomPainter {
         endAngle: math.pi / 2,
         colors: [
           const Color(0xFF7C3AED).withValues(alpha: 0.0),
-          const Color(0xFF38BDF8).withValues(alpha: 0.10),
-          const Color(0xFF7C3AED).withValues(alpha: 0.16),
+          const Color(0xFF38BDF8).withValues(alpha: 0.08),
+          const Color(0xFF7C3AED).withValues(alpha: 0.14),
         ],
         stops: const [0.0, 0.7, 1.0],
         transform: GradientRotation(angle - (math.pi / 2)),

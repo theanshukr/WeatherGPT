@@ -6,8 +6,22 @@ import 'package:http/http.dart' as http;
 import '../models/weather_model.dart';
 
 class LocationService {
-  // Resolves current GPS coordinates and requests permissions dynamically
-  Future<WeatherLocation> getCurrentLocation() async {
+  static WeatherLocation? _cachedLocation;
+  static DateTime? _lastFetchedTime;
+
+  /// Instant access to the last resolved high-precision location
+  static WeatherLocation? get currentCachedLocation => _cachedLocation;
+
+  // Resolves exact, high-precision GPS coordinates and requests permissions dynamically
+  Future<WeatherLocation> getCurrentLocation({bool forceRefresh = false}) async {
+    // Return cached if fresh (under 3 minutes) unless forced
+    if (!forceRefresh &&
+        _cachedLocation != null &&
+        _lastFetchedTime != null &&
+        DateTime.now().difference(_lastFetchedTime!).inMinutes < 3) {
+      return _cachedLocation!;
+    }
+
     try {
       // 1. Test if location services are enabled on device
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -18,39 +32,50 @@ class LocationService {
       }
 
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        // Try last known position first for instantaneous response
-        Position? position = await Geolocator.getLastKnownPosition();
+        Position? position;
 
-        if (position == null && serviceEnabled) {
+        if (serviceEnabled) {
           try {
+            // High-precision GPS query for exact location
             position = await Geolocator.getCurrentPosition(
               locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.medium,
-                timeLimit: Duration(seconds: 4),
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 6),
               ),
             );
           } catch (e) {
-            debugPrint('Primary GPS timeout, trying coarse: $e');
-            position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.low,
-                timeLimit: Duration(seconds: 3),
-              ),
-            );
+            debugPrint('High precision GPS timeout, attempting medium accuracy: $e');
+            try {
+              position = await Geolocator.getCurrentPosition(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.medium,
+                  timeLimit: Duration(seconds: 4),
+                ),
+              );
+            } catch (_) {
+              // Try last known as fallback
+              position = await Geolocator.getLastKnownPosition();
+            }
           }
+        } else {
+          position = await Geolocator.getLastKnownPosition();
         }
 
         if (position != null) {
-          // Reverse geocode to get city name
+          // Reverse geocode to get exact city/neighborhood name
           final cityName = await _reverseGeocode(position.latitude, position.longitude);
 
-          return WeatherLocation(
+          final resolved = WeatherLocation(
             name: cityName.isNotEmpty ? cityName : 'My Location',
             state: 'India',
             latitude: position.latitude,
             longitude: position.longitude,
             country: 'India',
           );
+
+          _cachedLocation = resolved;
+          _lastFetchedTime = DateTime.now();
+          return resolved;
         }
       }
     } catch (e) {
@@ -61,25 +86,39 @@ class LocationService {
     try {
       final ipLoc = await _getIpLocation();
       if (ipLoc != null) {
+        _cachedLocation = ipLoc;
+        _lastFetchedTime = DateTime.now();
         return ipLoc;
       }
     } catch (e) {
       debugPrint('IP location fallback error: $e');
     }
 
-    return _defaultLocation();
+    final fallback = _defaultLocation();
+    _cachedLocation ??= fallback;
+    return _cachedLocation!;
   }
 
   Future<String> _reverseGeocode(double lat, double lon) async {
-    // 1. Try BigDataCloud
+    // 1. Try BigDataCloud with high precision locality
     try {
       final res = await http.get(Uri.parse(
         'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=$lat&longitude=$lon&localityLanguage=en',
-      )).timeout(const Duration(seconds: 3));
+      )).timeout(const Duration(seconds: 4));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final city = data['city'] ?? data['locality'] ?? data['principalSubdivision'];
+        final locality = data['locality'] ?? data['subLocality'];
+        final city = data['city'] ?? data['principalSubdivision'];
+
+        if (locality != null && locality.toString().trim().isNotEmpty) {
+          final locStr = locality.toString().trim();
+          if (city != null && city.toString().trim().isNotEmpty && city.toString() != locStr) {
+            return '$locStr, ${city.toString().trim()}';
+          }
+          return locStr;
+        }
+
         if (city != null && city.toString().trim().isNotEmpty) {
           return city.toString().trim();
         }
@@ -89,15 +128,25 @@ class LocationService {
     // 2. Try Nominatim Reverse Geocoding
     try {
       final res = await http.get(
-        Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon'),
-        headers: {'User-Agent': 'WeatherGPT-App/1.0'},
-      ).timeout(const Duration(seconds: 3));
+        Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon&zoom=16&addressdetails=1'),
+        headers: {'User-Agent': 'WeatherGPT-App/2.0'},
+      ).timeout(const Duration(seconds: 4));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final address = data['address'] as Map<String, dynamic>?;
         if (address != null) {
-          final city = address['city'] ?? address['town'] ?? address['village'] ?? address['county'] ?? address['state_district'];
+          final sub = address['suburb'] ?? address['neighbourhood'] ?? address['residential'] ?? address['quarter'];
+          final city = address['city'] ?? address['town'] ?? address['county'] ?? address['state_district'];
+
+          if (sub != null && sub.toString().trim().isNotEmpty) {
+            final subStr = sub.toString().trim();
+            if (city != null && city.toString().trim().isNotEmpty && city.toString() != subStr) {
+              return '$subStr, ${city.toString().trim()}';
+            }
+            return subStr;
+          }
+
           if (city != null && city.toString().trim().isNotEmpty) {
             return city.toString().trim();
           }
@@ -109,7 +158,7 @@ class LocationService {
   }
 
   Future<WeatherLocation?> _getIpLocation() async {
-    // Source 1: ip-api.com (Fastest and most reliable)
+    // Source 1: ip-api.com
     try {
       final res = await http.get(Uri.parse('http://ip-api.com/json')).timeout(const Duration(seconds: 3));
       if (res.statusCode == 200) {
@@ -144,29 +193,6 @@ class LocationService {
         final city = data['cityName'] as String? ?? 'My Location';
         final region = data['regionName'] as String? ?? 'India';
         final country = data['countryName'] as String? ?? 'India';
-
-        if (lat != null && lon != null) {
-          return WeatherLocation(
-            name: city,
-            state: region,
-            latitude: lat,
-            longitude: lon,
-            country: country,
-          );
-        }
-      }
-    } catch (_) {}
-
-    // Source 3: ipapi.co
-    try {
-      final res = await http.get(Uri.parse('https://ipapi.co/json/')).timeout(const Duration(seconds: 3));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final lat = (data['latitude'] as num?)?.toDouble();
-        final lon = (data['longitude'] as num?)?.toDouble();
-        final city = data['city'] as String? ?? 'My Location';
-        final region = data['region'] as String? ?? 'India';
-        final country = data['country_name'] as String? ?? 'India';
 
         if (lat != null && lon != null) {
           return WeatherLocation(

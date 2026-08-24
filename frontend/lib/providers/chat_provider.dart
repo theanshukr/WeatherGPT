@@ -49,6 +49,14 @@ class ChatProvider with ChangeNotifier {
       double targetLon = lon ?? 0.0;
       String? targetLocName = locationName;
 
+      // Check static high precision cached location first
+      final cachedLoc = LocationService.currentCachedLocation;
+      if (cachedLoc != null && (targetLat == 0.0 || targetLon == 0.0 || targetLocName == null || targetLocName.isEmpty || targetLocName == 'Loading...')) {
+        targetLat = cachedLoc.latitude;
+        targetLon = cachedLoc.longitude;
+        targetLocName = cachedLoc.name;
+      }
+
       if (targetLat == 0.0 || targetLon == 0.0 || targetLocName == null || targetLocName.isEmpty || targetLocName == 'Loading...') {
         try {
           final loc = await _locationService.getCurrentLocation();
