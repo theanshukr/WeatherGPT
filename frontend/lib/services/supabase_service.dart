@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/constants/api_constants.dart';
 
 class SupabaseService {
   static const String supabaseUrl = 'https://psupzmalbgplbqfctpzg.supabase.co';
@@ -46,15 +49,55 @@ class SupabaseService {
     );
   }
 
-  // Email / Password Sign Up
+  // Email / Password Sign Up with automated direct bypass for SMTP email rate limits
   static Future<AuthResponse> signUpWithEmail({
     required String email,
     required String password,
+    String? fullName,
+    String? persona,
   }) async {
-    return await client.auth.signUp(
-      email: email,
-      password: password,
-    );
+    // Attempt 1: Direct backend verified registration (instant & bypasses email quota limits)
+    try {
+      final regUri = Uri.parse('${ApiConstants.baseUrl}/auth/register');
+      final regRes = await http.post(
+        regUri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+          'full_name': fullName ?? 'WeatherGPT User',
+          'persona': persona ?? 'general',
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (regRes.statusCode == 200) {
+        return await client.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+      }
+    } catch (_) {
+      // Backend unreachable or timeout, fallback to Supabase direct API
+    }
+
+    // Attempt 2: Standard Supabase client signup
+    try {
+      final response = await client.auth.signUp(
+        email: email,
+        password: password,
+      );
+
+      if (response.session != null) {
+        return response;
+      }
+
+      return await client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+    } catch (e) {
+      rethrow;
+    }
   }
 
   // Sign Out

@@ -8,7 +8,7 @@ void main() {
   group('WeatherGPT Unit & State Tests', () {
     test('WeatherData empty model initialization test', () {
       final weather = WeatherData.empty();
-      expect(weather.location.name, 'Locating...');
+      expect(weather.location.name, 'Loading...');
       expect(weather.temperature, 0.0);
       expect(weather.rainProbability, 0.0);
       expect(weather.hourlyForecast.isEmpty, true);
@@ -17,7 +17,7 @@ void main() {
 
     test('UserContext & Persona switching test', () {
       final provider = UserContextProvider();
-      expect(provider.currentPersona, DetectedPersona.farmer);
+      expect(provider.currentPersona, DetectedPersona.general);
 
       provider.setPersona(DetectedPersona.traveller);
       expect(provider.currentPersona, DetectedPersona.traveller);

@@ -14,6 +14,7 @@ try:
         echo=settings.DEBUG,
         future=True,
         pool_pre_ping=True,
+        connect_args={"statement_cache_size": 0},
     )
     async_session_factory = async_sessionmaker(
         engine,

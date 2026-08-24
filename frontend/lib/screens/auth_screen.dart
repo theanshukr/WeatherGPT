@@ -51,6 +51,15 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     );
   }
 
+  Future<void> _handleGuestLogin() async {
+    setState(() => _isLoading = true);
+    try {
+      await SupabaseService.signInAnonymously();
+    } catch (_) {}
+    _navigateToHome();
+    if (mounted) setState(() => _isLoading = false);
+  }
+
   /// Proper Auth Login using the designated Testing Account
   Future<void> _handleTestAccountLogin() async {
     _loginEmailController.text = testEmail;
@@ -69,8 +78,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         );
       }
       _navigateToHome();
-    } on AuthException catch (_) {
-      // 2. If test user does not exist in Supabase yet, create and sign in
+    } catch (e) {
+      // 2. If test user sign in fails, create verified user and sign in
       try {
         await SupabaseService.signUpWithEmail(email: testEmail, password: testPassword);
         _navigateToHome();
@@ -83,15 +92,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             ),
           );
         }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Authentication error: $e'),
-            backgroundColor: AppColors.alertCrimson,
-          ),
-        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -386,6 +386,28 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Continue as Guest Button
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _isLoading ? null : _handleGuestLogin,
+                      icon: Icon(
+                        Icons.person_outline_rounded,
+                        size: 18,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                      label: Text(
+                        'Continue as Guest',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
                       ),
                     ),
                   ),
