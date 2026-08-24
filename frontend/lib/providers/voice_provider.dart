@@ -12,8 +12,8 @@ class VoiceProvider with ChangeNotifier {
   bool _autoSpeechEnabled = true;
 
   /// Whether the user has opted into the higher-quality cloud voice.
-  /// False = always use on-device TTS.
-  bool _naturalVoiceEnabled = false;
+  /// True = use Sarvam natural voice by default (falls back to device if unavailable).
+  bool _naturalVoiceEnabled = true;
 
   /// Message id currently being spoken, if any — lets the UI show a
   /// per-message "speaking" state instead of a single global spinner.

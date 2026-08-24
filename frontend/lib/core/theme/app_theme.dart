@@ -4,17 +4,18 @@ import 'app_colors.dart';
 import 'app_typography.dart';
 
 class AppTheme {
-  // Dark Theme (Default OLED Emerald Aesthetic)
+  // Dark Theme (Official Google Gemini Charcoal Aesthetic)
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.darkBackground,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.emeraldNeon,
+        primary: AppColors.geminiBlue,
         onPrimary: Colors.black,
-        secondary: AppColors.electricCyan,
-        onSecondary: Colors.black,
+        secondary: AppColors.geminiPurple,
+        onSecondary: Colors.white,
+        tertiary: AppColors.geminiCyan,
         surface: AppColors.darkSurface,
         onSurface: AppColors.darkTextPrimary,
         error: AppColors.alertCrimson,
@@ -24,7 +25,7 @@ class AppTheme {
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.light,
@@ -41,23 +42,24 @@ class AppTheme {
         ),
       ),
       iconTheme: const IconThemeData(
-        color: AppColors.emeraldNeon,
+        color: AppColors.darkTextPrimary,
         size: 24,
       ),
     );
   }
 
-  // Light Theme (Frosted Porcelain with Emerald Accents)
+  // Light Theme (Official Google Gemini Frosted Cloud Aesthetic)
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.lightBackground,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.emeraldDark,
+        primary: AppColors.geminiBlue,
         onPrimary: Colors.white,
-        secondary: AppColors.tealAccent,
+        secondary: AppColors.geminiPurple,
         onSecondary: Colors.white,
+        tertiary: AppColors.tealAccent,
         surface: AppColors.lightSurface,
         onSurface: AppColors.lightTextPrimary,
         error: AppColors.alertCrimson,
@@ -67,7 +69,7 @@ class AppTheme {
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
@@ -77,7 +79,7 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: AppColors.lightSurface,
-        elevation: 1,
+        elevation: 0,
         shadowColor: const Color(0x0A000000),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -85,7 +87,7 @@ class AppTheme {
         ),
       ),
       iconTheme: const IconThemeData(
-        color: AppColors.emeraldDark,
+        color: AppColors.lightTextPrimary,
         size: 24,
       ),
     );

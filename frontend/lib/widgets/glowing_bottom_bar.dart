@@ -18,7 +18,7 @@ class GlowingBottomBar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       height: 66,
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
@@ -35,16 +35,16 @@ class GlowingBottomBar extends StatelessWidget {
           ),
           if (isDark)
             BoxShadow(
-              color: AppColors.emeraldNeon.withValues(alpha: 0.12),
+              color: AppColors.geminiBlue.withValues(alpha: 0.10),
               blurRadius: 20,
-              spreadRadius: -4,
+              spreadRadius: -2,
             ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // 1. Left Tab: Settings
+          // 1. Settings Tab
           _buildNavButton(
             context: context,
             icon: Icons.tune_rounded,
@@ -53,7 +53,7 @@ class GlowingBottomBar extends StatelessWidget {
             onTap: () => onItemSelected(0),
           ),
 
-          // 2. Middle Tab: Home / Glowing Dynamic Voice Orb
+          // 2. Middle Tab: Gemini Live Sparkle / Voice
           GestureDetector(
             onTap: () {
               onItemSelected(1);
@@ -64,17 +64,11 @@ class GlowingBottomBar extends StatelessWidget {
               height: 52,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const RadialGradient(
-                  colors: [
-                    Color(0xFF00FF87),
-                    Color(0xFF00E676),
-                    Color(0xFF059669),
-                  ],
-                ),
+                gradient: AppColors.geminiSparkleGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.emeraldNeon.withValues(alpha: selectedIndex == 1 ? 0.65 : 0.35),
-                    blurRadius: selectedIndex == 1 ? 18 : 10,
+                    color: AppColors.geminiBlue.withValues(alpha: selectedIndex == 1 ? 0.60 : 0.30),
+                    blurRadius: selectedIndex == 1 ? 16 : 8,
                     spreadRadius: selectedIndex == 1 ? 2 : 0,
                   ),
                 ],
@@ -90,17 +84,19 @@ class GlowingBottomBar extends StatelessWidget {
                       width: 1.5,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.mic_rounded,
-                    color: Colors.white,
-                    size: 24,
+                  child: const Center(
+                    child: Icon(
+                      Icons.mic_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
 
-          // 3. Right Tab: Profile
+          // 3. Profile Tab
           _buildNavButton(
             context: context,
             icon: Icons.person_outline_rounded,
@@ -121,7 +117,7 @@ class GlowingBottomBar extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeColor = isDark ? AppColors.emeraldNeon : AppColors.emeraldDark;
+    final activeColor = isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8);
     final inactiveColor = isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary;
 
     return GestureDetector(
@@ -132,7 +128,7 @@ class GlowingBottomBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDark ? AppColors.emeraldNeon.withValues(alpha: 0.12) : AppColors.emeraldDark.withValues(alpha: 0.08))
+              ? (isDark ? AppColors.geminiBlue.withValues(alpha: 0.15) : const Color(0xFFE8F0FE))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -141,7 +137,7 @@ class GlowingBottomBar extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 24,
+              size: 22,
               color: isSelected ? activeColor : inactiveColor,
             ),
             if (isSelected) ...[

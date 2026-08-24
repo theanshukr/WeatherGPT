@@ -15,6 +15,8 @@ class AiChatService {
     String language = 'en',
     String? activePersona,
     String? locationName,
+    String? sessionId,
+    String? userId,
   }) async {
     final payload = {
       'message': query,
@@ -23,6 +25,8 @@ class AiChatService {
       'location': locationName,
       'language': language,
       'persona': activePersona ?? 'general',
+      if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
+      if (userId != null && userId.isNotEmpty) 'user_id': userId,
     };
 
     final response = await _apiClient.post(

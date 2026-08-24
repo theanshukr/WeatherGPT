@@ -2,52 +2,40 @@ import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../services/ai_chat_service.dart';
 import '../services/location_service.dart';
+import '../services/supabase_service.dart';
 
 class ChatProvider with ChangeNotifier {
   final AiChatService _aiChatService = AiChatService();
+  final LocationService _locationService = LocationService();
 
   final List<ChatMessage> _messages = [];
+  String? _sessionId;
   bool _isTyping = false;
   bool _isListening = false;
 
   List<ChatMessage> get messages => _messages;
+  String? get sessionId => _sessionId;
   bool get isTyping => _isTyping;
   bool get isListening => _isListening;
-
-  ChatProvider() {
-    _initWelcomeMessage();
-  }
-
-  void _initWelcomeMessage() {
-    _messages.add(
-      ChatMessage(
-        id: 'welcome_msg',
-        role: MessageRole.assistant,
-        content: "Hi! I'm **WeatherGPT**, your AI Weather Intelligence Assistant.\n\nAsk me anything about today's forecast, rain probability, agricultural spraying advice, or travel conditions.",
-        timestamp: DateTime.now(),
-        suggestedActions: const [
-          SuggestedAction(title: '🌧️ Will it rain today?', query: 'Will it rain today?'),
-          SuggestedAction(title: '🌾 Farming & Spray Advice', query: 'Is weather suitable for pesticide spraying today?'),
-          SuggestedAction(title: '✈️ Travel Weather Briefing', query: 'Travel weather briefing for tomorrow'),
-        ],
-      ),
-    );
-  }
 
   void setListening(bool listening) {
     _isListening = listening;
     notifyListeners();
   }
 
-  final LocationService _locationService = LocationService();
-
-  Future<void> sendUserMessage(String text, {double? lat, double? lon, String? activePersona}) async {
-    if (text.trim().isEmpty) return;
+  Future<void> sendUserMessage(
+    String text, {
+    double? lat,
+    double? lon,
+    String? activePersona,
+  }) async {
+    final queryText = text.trim();
+    if (queryText.isEmpty) return;
 
     final userMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       role: MessageRole.user,
-      content: text.trim(),
+      content: queryText,
       timestamp: DateTime.now(),
     );
 
@@ -67,19 +55,41 @@ class ChatProvider with ChangeNotifier {
         } catch (_) {}
       }
 
-      final aiResponse = await _aiChatService.sendMessage(
-        query: text.trim(),
-        latitude: targetLat,
-        longitude: targetLon,
-        activePersona: activePersona,
-      );
-      _messages.add(aiResponse);
+      ChatMessage? aiResponse;
+      // Up to 2 attempts with short delay for network resilience
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try {
+          aiResponse = await _aiChatService.sendMessage(
+            query: queryText,
+            latitude: targetLat,
+            longitude: targetLon,
+            activePersona: activePersona,
+            sessionId: _sessionId,
+            userId: SupabaseService.currentUserId,
+          );
+          break;
+        } catch (e) {
+          if (attempt == 0) {
+            await Future.delayed(const Duration(milliseconds: 600));
+          } else {
+            rethrow;
+          }
+        }
+      }
+
+      if (aiResponse != null) {
+        // Persist session ID returned by backend so subsequent queries maintain full conversational context
+        if (aiResponse.id.isNotEmpty) {
+          _sessionId = aiResponse.id;
+        }
+        _messages.add(aiResponse);
+      }
     } catch (e) {
       _messages.add(
         ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           role: MessageRole.assistant,
-          content: 'Unable to connect to WeatherGPT AI server. Please try again.',
+          content: 'Unable to reach WeatherGPT AI server. Please check your internet connection and try again.',
           timestamp: DateTime.now(),
         ),
       );
@@ -91,7 +101,7 @@ class ChatProvider with ChangeNotifier {
 
   void clearConversation() {
     _messages.clear();
-    _initWelcomeMessage();
+    _sessionId = null;
     notifyListeners();
   }
 }
