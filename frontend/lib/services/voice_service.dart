@@ -54,20 +54,33 @@ class VoiceService {
   /// but the backend/API key isn't available), the caller should fall
   /// back to [VoiceEngine.device] — this method does NOT auto-fallback
   /// itself, so the UI can tell the user what happened.
+  static String sanitizeForSpeech(String text) {
+    if (text.isEmpty) return '';
+    var t = text.replaceAll(RegExp(r'\[([^\]]+)\]\([^\)]+\)'), r'$1');
+    t = t.replaceAll(RegExp(r'(\d+)\s*°\s*C'), r'$1 डिग्री');
+    t = t.replaceAll(RegExp(r'(\d+)\s*%'), r'$1 प्रतिशत');
+    t = t.replaceAll(RegExp(r'[*_~`#]'), ' ');
+    t = t.replaceAll(RegExp(r'[-•–—|/]+'), ' ');
+    t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t;
+  }
+
   Future<bool> speak(String text, {required VoiceEngine engine, String languageCode = 'hi-IN'}) async {
-    if (text.trim().isEmpty) return false;
+    final clean = sanitizeForSpeech(text);
+    if (clean.trim().isEmpty) return false;
     await stop();
 
     if (engine == VoiceEngine.device) {
-      return _speakOnDevice(text);
+      return _speakOnDevice(clean);
     }
-    return _speakNatural(text, languageCode: languageCode);
+    return _speakNatural(clean, languageCode: languageCode);
   }
 
   Future<bool> _speakOnDevice(String text) async {
     try {
       await _ensureDeviceTtsInitialized();
-      final result = await _deviceTts.speak(text);
+      final clean = sanitizeForSpeech(text);
+      final result = await _deviceTts.speak(clean);
       // flutter_tts returns 1 on success across platforms.
       return result == 1;
     } catch (e) {

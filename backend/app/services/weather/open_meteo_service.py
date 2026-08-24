@@ -416,6 +416,29 @@ class OpenMeteoService:
             cached["location"] = location_name
             return cached
 
+        # Fast-track: If WeatherAPI key is configured, use it directly (100ms, avoids cloud IP rate-limits)
+        if settings.WEATHERAPI_KEY:
+            wapi_data = await self._fetch_from_weatherapi(lat, lon, location_name)
+            if wapi_data and "current" in wapi_data:
+                cur = wapi_data["current"]
+                result = {
+                    "location": location_name,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "temperature": cur.get("temperature_2m", 0.0),
+                    "humidity": cur.get("relative_humidity_2m", 0.0),
+                    "precipitation": cur.get("precipitation", 0.0),
+                    "wind_speed": cur.get("wind_speed_10m", 0.0),
+                    "wind_direction": cur.get("wind_direction_10m", 0.0),
+                    "weather_code": cur.get("weather_code", 1),
+                    "condition": cur.get("condition", "Clear"),
+                    "is_day": cur.get("is_day", 1),
+                    "time": cur.get("time", ""),
+                    "source": "weatherapi",
+                }
+                _cache_set(cache_key, result, _CACHE_TTL_WEATHER)
+                return result
+
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await self._fetch_with_retry(
@@ -453,29 +476,7 @@ class OpenMeteoService:
         except Exception as e:
             logger.error(f"Open-Meteo weather fetch error: {e}")
 
-        # Tier 2: Live WeatherAPI fallback (if configured)
-        wapi_data = await self._fetch_from_weatherapi(lat, lon, location_name)
-        if wapi_data and "current" in wapi_data:
-            cur = wapi_data["current"]
-            result = {
-                "location": location_name,
-                "latitude": lat,
-                "longitude": lon,
-                "temperature": cur.get("temperature_2m", 0.0),
-                "humidity": cur.get("relative_humidity_2m", 0.0),
-                "precipitation": cur.get("precipitation", 0.0),
-                "wind_speed": cur.get("wind_speed_10m", 0.0),
-                "wind_direction": cur.get("wind_direction_10m", 0.0),
-                "weather_code": cur.get("weather_code", 1),
-                "condition": cur.get("condition", "Clear"),
-                "is_day": cur.get("is_day", 1),
-                "time": cur.get("time", ""),
-                "source": "weatherapi",
-            }
-            _cache_set(cache_key, result, _CACHE_TTL_WEATHER)
-            return result
-
-        # Tier 3: Stale cache fallback
+        # Stale cache fallback
         stale = _cache_get_stale(cache_key)
         if stale:
             logger.info(f"Serving stale weather cache for ({lat}, {lon}) after live fetch failure")
@@ -557,6 +558,13 @@ class OpenMeteoService:
                 return data
         except Exception:
             pass
+
+        # Fast-track: If WeatherAPI key is configured, use it directly (120ms, avoids cloud IP rate-limits)
+        if settings.WEATHERAPI_KEY:
+            wapi_data = await self._fetch_from_weatherapi(lat, lon, location_name)
+            if wapi_data:
+                _cache_set(mem_key, wapi_data, _CACHE_TTL_COMPREHENSIVE)
+                return wapi_data
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:

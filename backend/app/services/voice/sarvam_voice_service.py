@@ -98,6 +98,43 @@ class SarvamVoiceService:
                 "error": str(e),
             }
 
+    @staticmethod
+    def clean_text_for_speech(text: str, language_code: str = "hi-IN") -> str:
+        """Strip all markdown formatting, asterisks, hashes, bullets, and emojis so TTS speaks naturally."""
+        if not text:
+            return ""
+        import re
+        # 1. Remove markdown links [text](url) -> text
+        t = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+        # 2. Replace units with natural spoken words
+        if language_code.startswith("hi") or language_code in ("hi-IN", "mr-IN", "gu-IN"):
+            t = re.sub(r'(\d+)\s*°\s*C', r'\1 डिग्री सेल्सियस', t)
+            t = re.sub(r'(\d+)\s*%', r'\1 प्रतिशत', t)
+            t = re.sub(r'(\d+)\s*km/h', r'\1 किलोमीटर प्रति घंटा', t)
+            t = re.sub(r'(\d+)\s*mm', r'\1 मिलीमीटर', t)
+        else:
+            t = re.sub(r'(\d+)\s*°\s*C', r'\1 degree Celsius', t)
+            t = re.sub(r'(\d+)\s*%', r'\1 percent', t)
+            t = re.sub(r'(\d+)\s*km/h', r'\1 km per hour', t)
+            t = re.sub(r'(\d+)\s*mm', r'\1 millimeters', t)
+
+        # 3. Strip all markdown asterisks, underscores, hashes, backticks
+        t = re.sub(r'[*_~`#]', ' ', t)
+
+        # 4. Remove emojis and unusual unicode symbols
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]',
+            flags=re.UNICODE,
+        )
+        t = emoji_pattern.sub(' ', t)
+
+        # 5. Remove bullets, vertical bars, and orphan symbols
+        t = re.sub(r'[-•–—|/]+', ' ', t)
+
+        # 6. Collapse multiple whitespaces
+        t = re.sub(r'\s+', ' ', t).strip()
+        return t
+
     async def text_to_speech(
         self,
         text: str,
@@ -129,14 +166,14 @@ class SarvamVoiceService:
             "Content-Type": "application/json",
         }
 
-        # Remove asterisks / markdown formatting before sending to TTS for clean speech
-        clean_text = text.replace("**", "").replace("*", "").replace("#", "").replace("•", "").strip()
+        # Clean speech text: completely remove asterisks, emojis, and markdown
+        clean_text = self.clean_text_for_speech(text, target_language_code)
 
         # Split into natural sentence chunks under 500 chars to avoid truncation
         import re
         inputs = []
         if len(clean_text) <= 500:
-            inputs = [clean_text]
+            inputs = [clean_text] if clean_text else [""]
         else:
             sentences = re.split(r'([।!?.\n]+)', clean_text)
             cur = ""
@@ -161,9 +198,9 @@ class SarvamVoiceService:
             "inputs": inputs,
             "target_language_code": target_language_code,
             "speaker": resolved_speaker,
-            "pitch": pitch,
-            "pace": pace,
-            "loudness": loudness,
+            "pitch": resolved_pitch,
+            "pace": resolved_pace,
+            "loudness": resolved_loudness,
             "speech_sample_rate": 22050,
             "enable_preprocessing": True,
             "model": resolved_model,
