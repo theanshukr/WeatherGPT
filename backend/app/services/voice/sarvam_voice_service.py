@@ -135,6 +135,35 @@ class SarvamVoiceService:
         t = re.sub(r'\s+', ' ', t).strip()
         return t
 
+    @staticmethod
+    def merge_wav_base64_chunks(base64_list: list) -> Optional[str]:
+        """Merges multiple WAV base64 audio chunks into a single valid WAV base64 string."""
+        if not base64_list:
+            return None
+        if len(base64_list) == 1:
+            return base64_list[0]
+        try:
+            import io
+            import wave
+            out_io = io.BytesIO()
+            wav_out = None
+            for b64 in base64_list:
+                if not b64:
+                    continue
+                raw = base64.b64decode(b64)
+                in_io = io.BytesIO(raw)
+                with wave.open(in_io, 'rb') as w_in:
+                    if wav_out is None:
+                        wav_out = wave.open(out_io, 'wb')
+                        wav_out.setparams(w_in.getparams())
+                    wav_out.writeframes(w_in.readframes(w_in.getnframes()))
+            if wav_out:
+                wav_out.close()
+            return base64.b64encode(out_io.getvalue()).decode('utf-8')
+        except Exception as e:
+            logger.error(f"Error merging WAV audio chunks: {e}")
+            return base64_list[0] if base64_list else None
+
     async def text_to_speech(
         self,
         text: str,
@@ -216,7 +245,7 @@ class SarvamVoiceService:
                 if response.status_code == 200:
                     result = response.json()
                     audios = result.get("audios", [])
-                    audio_b64 = audios[0] if len(audios) == 1 else None
+                    audio_b64 = self.merge_wav_base64_chunks(audios)
                     return {
                         "audio_base64": audio_b64,
                         "audio_chunks": audios,

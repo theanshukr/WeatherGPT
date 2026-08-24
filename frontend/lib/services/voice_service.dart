@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:flutter_tts/flutter_tts.dart';
@@ -32,6 +33,8 @@ class VoiceService {
   final ApiClient _apiClient = ApiClient();
 
   bool _deviceTtsInitialized = false;
+  Completer<void>? _cloudPlayCompleter;
+  StreamSubscription? _playerSub;
 
   Future<void> _ensureDeviceTtsInitialized() async {
     if (_deviceTtsInitialized) return;
@@ -43,6 +46,7 @@ class VoiceService {
     await _deviceTts.setSpeechRate(0.48);
     await _deviceTts.setPitch(1.0);
     await _deviceTts.setVolume(1.0);
+    await _deviceTts.awaitSpeakCompletion(true);
     _deviceTtsInitialized = true;
   }
 
@@ -104,7 +108,7 @@ class VoiceService {
       final status = response['status'] as String?;
       final audioBase64 = response['audio_base64'] as String?;
 
-      if (status == 'api_key_missing' || audioBase64 == null) {
+      if (status == 'api_key_missing' || audioBase64 == null || audioBase64.trim().isEmpty) {
         developer.log(
           'Natural voice unavailable (${response['message'] ?? status}); caller should fall back to device TTS.',
           name: 'VoiceService',
@@ -113,8 +117,31 @@ class VoiceService {
       }
 
       final bytes = base64Decode(audioBase64);
+      await _cloudPlayer.stop();
       await _cloudPlayer.setAudioSource(_Base64AudioSource(bytes));
+
+      _playerSub?.cancel();
+      _cloudPlayCompleter = Completer<void>();
+
+      _playerSub = _cloudPlayer.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          _playerSub?.cancel();
+          if (_cloudPlayCompleter != null && !_cloudPlayCompleter!.isCompleted) {
+            _cloudPlayCompleter!.complete();
+          }
+        }
+      });
+
       await _cloudPlayer.play();
+
+      if (_cloudPlayCompleter != null) {
+        await _cloudPlayCompleter!.future.timeout(
+          const Duration(seconds: 45),
+          onTimeout: () {
+            _playerSub?.cancel();
+          },
+        );
+      }
       return true;
     } catch (e) {
       developer.log('Natural (Sarvam) TTS failed: $e', name: 'VoiceService');
@@ -125,6 +152,12 @@ class VoiceService {
   /// Stops any audio currently playing from either engine.
   Future<void> stop() async {
     try {
+      _playerSub?.cancel();
+      if (_cloudPlayCompleter != null && !_cloudPlayCompleter!.isCompleted) {
+        _cloudPlayCompleter!.complete();
+      }
+    } catch (_) {}
+    try {
       await _deviceTts.stop();
     } catch (_) {}
     try {
@@ -133,6 +166,7 @@ class VoiceService {
   }
 
   void dispose() {
+    _playerSub?.cancel();
     _deviceTts.stop();
     _cloudPlayer.dispose();
   }
@@ -153,7 +187,7 @@ class _Base64AudioSource extends StreamAudioSource {
       contentLength: end - start,
       offset: start,
       stream: Stream.value(bytes.sublist(start, end)),
-      contentType: 'audio/mpeg',
+      contentType: 'audio/wav',
     );
   }
 }

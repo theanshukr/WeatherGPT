@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../core/theme/app_colors.dart';
+import '../models/chat_message_model.dart';
 import '../providers/chat_provider.dart';
 import '../providers/voice_provider.dart';
 import '../providers/weather_provider.dart';
@@ -38,6 +39,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
   String _userTranscription = '';
   String _aiSpeechReply = '';
   bool _speechAvailable = false;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -54,6 +56,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
 
   @override
   void dispose() {
+    _isProcessing = false;
     _rippleController.dispose();
     _speechToText.stop();
     context.read<VoiceProvider>().stop();
@@ -64,7 +67,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
     try {
       _speechAvailable = await _speechToText.initialize(
         onError: (error) {
-          if (mounted && _liveState == GeminiLiveState.listening) {
+          if (mounted && _liveState == GeminiLiveState.listening && !_isProcessing) {
             setState(() {
               _userTranscription = 'Listening paused. Tap mic to speak.';
               _liveState = GeminiLiveState.paused;
@@ -72,8 +75,8 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
           }
         },
         onStatus: (status) {
-          if (status == 'done' && mounted && _liveState == GeminiLiveState.listening) {
-            if (_userTranscription.isNotEmpty) {
+          if (status == 'done' && mounted && _liveState == GeminiLiveState.listening && !_isProcessing) {
+            if (_userTranscription.trim().isNotEmpty) {
               _processVoiceTurn();
             }
           }
@@ -103,12 +106,12 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
   }
 
   Future<void> _startListening() async {
-    if (!_speechAvailable) return;
+    if (!_speechAvailable || _isProcessing) return;
 
     try {
       await _speechToText.listen(
         onResult: (result) {
-          if (mounted) {
+          if (mounted && !_isProcessing) {
             setState(() {
               _userTranscription = result.recognizedWords;
             });
@@ -128,9 +131,15 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
   }
 
   Future<void> _processVoiceTurn() async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
     final query = _userTranscription.trim();
-    if (query.isEmpty) {
-      _startListening();
+    if (query.isEmpty || query.length < 2) {
+      _isProcessing = false;
+      if (mounted && _liveState == GeminiLiveState.listening) {
+        _startListening();
+      }
       return;
     }
 
@@ -139,9 +148,22 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
     final weatherProv = context.read<WeatherProvider>();
     final contextProv = context.read<UserContextProvider>();
 
-    setState(() {
-      _liveState = GeminiLiveState.thinking;
-    });
+    // Immediately stop mic listening so the microphone doesn't pick up ambient noise or its own TTS
+    try {
+      await _speechToText.stop();
+    } catch (_) {}
+
+    // Stop any existing audio currently playing
+    await voiceProv.stop();
+
+    final prevMessageCount = chatProv.messages.length;
+
+    if (mounted) {
+      setState(() {
+        _liveState = GeminiLiveState.thinking;
+        _userTranscription = query;
+      });
+    }
 
     try {
       await chatProv.sendUserMessage(
@@ -151,23 +173,15 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
         activePersona: contextProv.currentPersona.name,
       );
 
-      if (chatProv.messages.isNotEmpty) {
+      if (chatProv.messages.length > prevMessageCount) {
         final lastMsg = chatProv.messages.last;
-        if (mounted) {
+        if (lastMsg.role == MessageRole.assistant && mounted) {
           setState(() {
             _aiSpeechReply = lastMsg.content;
             _liveState = GeminiLiveState.speaking;
           });
 
           await voiceProv.speakMessage('live_session', _aiSpeechReply);
-
-          if (mounted) {
-            setState(() {
-              _liveState = GeminiLiveState.listening;
-              _userTranscription = '';
-            });
-            _startListening();
-          }
         }
       }
     } catch (e) {
@@ -177,6 +191,35 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
           _userTranscription = 'Error processing request.';
         });
       }
+    } finally {
+      _isProcessing = false;
+      if (mounted && (_liveState == GeminiLiveState.speaking || _liveState == GeminiLiveState.thinking)) {
+        setState(() {
+          _liveState = GeminiLiveState.listening;
+          _userTranscription = '';
+        });
+        _startListening();
+      }
+    }
+  }
+
+  void _toggleLiveSession() {
+    final voiceProv = context.read<VoiceProvider>();
+    if (_liveState == GeminiLiveState.listening ||
+        _liveState == GeminiLiveState.speaking ||
+        _liveState == GeminiLiveState.thinking) {
+      _speechToText.stop();
+      voiceProv.stop();
+      _isProcessing = false;
+      setState(() => _liveState = GeminiLiveState.paused);
+    } else {
+      voiceProv.stop();
+      _isProcessing = false;
+      setState(() {
+        _liveState = GeminiLiveState.listening;
+        _userTranscription = 'Say it — I’ll take notes';
+      });
+      _startListening();
     }
   }
 
@@ -319,15 +362,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
                     child: IosVoiceOrb3D(
                       size: 260,
                       state: _getOrbState(),
-                      onTap: () {
-                        if (_liveState == GeminiLiveState.listening) {
-                          _speechToText.stop();
-                          setState(() => _liveState = GeminiLiveState.paused);
-                        } else {
-                          setState(() => _liveState = GeminiLiveState.listening);
-                          _startListening();
-                        }
-                      },
+                      onTap: _toggleLiveSession,
                     ),
                   ).animate().fadeIn(duration: 600.ms).scaleXY(begin: 0.85, end: 1, curve: Curves.easeOutBack),
 
@@ -427,15 +462,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
     final isListening = _liveState == GeminiLiveState.listening;
 
     return IosBouncingButton(
-      onTap: () {
-        if (isListening) {
-          _speechToText.stop();
-          setState(() => _liveState = GeminiLiveState.paused);
-        } else {
-          setState(() => _liveState = GeminiLiveState.listening);
-          _startListening();
-        }
-      },
+      onTap: _toggleLiveSession,
       child: AnimatedBuilder(
         animation: _rippleController,
         builder: (context, child) {
