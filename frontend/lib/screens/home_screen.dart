@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
-import '../models/weather_model.dart';
 import '../providers/weather_provider.dart';
-import '../providers/user_context_provider.dart';
-import '../widgets/context_badge.dart';
+import '../widgets/ios_svg_icon.dart';
+import '../widgets/ios_bouncing_button.dart';
 import '../widgets/error_dialog.dart';
-import '../widgets/gemini_sparkle_icon.dart';
 import 'alerts_screen.dart';
 import 'map_screen.dart';
 import 'chat_screen.dart';
 import 'gemini_live_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,12 +21,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _inputController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkWeatherStatus();
     });
+  }
+
+  @override
+  void dispose() {
+    _inputController.dispose();
+    super.dispose();
   }
 
   void _checkWeatherStatus() {
@@ -54,578 +62,554 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _submitInput() {
+    final text = _inputController.text.trim();
+    if (text.isNotEmpty) {
+      _inputController.clear();
+      _openTextChat(query: text);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final weatherProv = context.watch<WeatherProvider>();
-    final contextProv = context.watch<UserContextProvider>();
     final weather = weatherProv.weatherData;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Background Subtle Radiant Aurora Glow
-            if (isDark)
-              Positioned(
-                top: -80,
-                left: MediaQuery.of(context).size.width * 0.15,
-                child: Container(
-                  width: 320,
-                  height: 320,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.geminiBlue.withValues(alpha: 0.08),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.geminiPurple.withValues(alpha: 0.12),
-                        blurRadius: 160,
-                        spreadRadius: 60,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // Main Scrollable Content
-            RefreshIndicator(
-              color: AppColors.geminiBlue,
-              onRefresh: () async {
-                await weatherProv.loadWeatherData();
-                _checkWeatherStatus();
-              },
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-
-                    // Top Bar: Gemini Sparkle + Location & Action Icons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const GeminiSparkleIcon(size: 26),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'WeatherGPT',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on_rounded, size: 12, color: AppColors.geminiBlue),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      weather.location.name.isNotEmpty && weather.location.name != 'Loading...'
-                                          ? weather.location.name
-                                          : 'Locating...',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-
-                        Row(
-                          children: [
-                            // GIS Radar Map Button
-                            IconButton(
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                                  border: Border.all(
-                                    color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.public_rounded,
-                                  size: 18,
-                                  color: AppColors.geminiCyan,
-                                ),
-                              ),
-                              tooltip: 'GIS Radar & Alert Map',
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const MapScreen()),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 4),
-
-                            // Severe Weather Alert Bell
-                            IconButton(
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                                  border: Border.all(
-                                    color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_active_outlined,
-                                  size: 18,
-                                  color: AppColors.sunnyGold,
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const AlertsScreen()),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Gemini Persona Context Badge
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: ContextBadge(
-                        persona: contextProv.currentPersona,
-                        confidence: contextProv.userContext.confidenceScore,
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Gemini Live Voice Orb Hero Card
-                    GestureDetector(
-                      onTap: _openGeminiLive,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                          borderRadius: BorderRadius.circular(26),
-                          border: Border.all(
-                            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isDark ? Colors.black38 : Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 18,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 58,
-                              height: 58,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: AppColors.geminiSparkleGradient,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.geminiBlue.withValues(alpha: 0.35),
-                                    blurRadius: 14,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.auto_awesome_rounded,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Gemini Live Voice',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.geminiBlue.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          'NEW',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            color: AppColors.geminiBlue,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    'Talk naturally with Megha AI about forecasts, rain & alerts.',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 16,
-                              color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // Live Weather Overview Card
-                    _buildLiveWeatherCard(context, weatherProv: weatherProv, weather: weather, isDark: isDark),
-
-                    const SizedBox(height: 16),
-
-                    // Hourly Forecast Strip
-                    if (weather.hourlyForecast.isNotEmpty)
-                      _buildHourlyForecastStrip(context, weather: weather, isDark: isDark),
-
-                    const SizedBox(height: 18),
-
-                    // Quick AI Prompt Chips
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'QUICK QUESTIONS',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                          color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildQuickChip('🌧️ Will it rain today?', isDark),
-                        _buildQuickChip('🌾 Crop spraying advice', isDark),
-                        _buildQuickChip('✈️ Weekend travel risk', isDark),
-                        _buildQuickChip('⚡ Severe alerts status', isDark),
-                      ],
-                    ),
-
-                    const SizedBox(height: 90), // Space for floating input pill
+      body: Stack(
+        children: [
+          // Ethereal Lavender Ambient Top-Right Glow
+          Positioned(
+            top: -60,
+            right: -60,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    isDark
+                        ? const Color(0xFF7C3AED).withValues(alpha: 0.18)
+                        : const Color(0xFFDDD6FE).withValues(alpha: 0.85),
+                    isDark
+                        ? const Color(0xFFC084FC).withValues(alpha: 0.08)
+                        : const Color(0xFFEDE9FE).withValues(alpha: 0.4),
+                    Colors.transparent,
                   ],
+                  stops: const [0.0, 0.55, 1.0],
                 ),
               ),
             ),
+          ),
 
-            // Floating Bottom Ask Pill Bar (Gemini Home Bar)
-            Positioned(
-              bottom: 16,
-              left: 20,
-              right: 20,
-              child: GestureDetector(
-                onTap: () => _openTextChat(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                      width: 1.2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isDark ? Colors.black54 : Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // Top Header Bar: Menu (≡) & Options (···)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const GeminiSparkleIcon(size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Ask WeatherGPT anything...',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: _openGeminiLive,
+                      // Left Menu Button
+                      IosBouncingButton(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          );
+                        },
                         child: Container(
-                          padding: const EdgeInsets.all(7),
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isDark ? const Color(0xFF1E1F20) : const Color(0xFFF0F4F9),
+                            color: isDark ? AppColors.darkSurface : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          child: const Icon(
-                            Icons.mic_rounded,
-                            size: 18,
-                            color: AppColors.geminiCyan,
+                          child: Center(
+                            child: IosSvgIcon(
+                              'menu',
+                              size: 18,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
                           ),
                         ),
-                      ),
+                      ).animate().fadeIn(duration: 350.ms).scaleXY(begin: 0.9, end: 1),
+
+                      // Weather Location Center Pill
+                      IosBouncingButton(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MapScreen()),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkSurfaceElevated
+                                : Colors.white.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const IosSvgIcon(
+                                'cloud_rain',
+                                size: 14,
+                                color: Color(0xFF7C3AED),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                weather.location.name.isNotEmpty && weather.location.name != 'Loading...'
+                                    ? '${weather.location.name} • ${weather.temperature.round()}°C'
+                                    : 'Live Weather',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ).animate().fadeIn(duration: 350.ms).slideY(begin: -0.2, end: 0),
+
+                      // Right More Options Button
+                      IosBouncingButton(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                          );
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkSurface : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: IosSvgIcon(
+                              'more_horizontal',
+                              size: 18,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                        ),
+                      ).animate().fadeIn(duration: 350.ms).scaleXY(begin: 0.9, end: 1),
                     ],
                   ),
                 ),
-              ),
+
+                // Main Scrollable Area
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 18),
+
+                        // Greeting Section matching Screen 1
+                        Text(
+                          'Hi, Hendricks',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
+                            letterSpacing: -0.2,
+                          ),
+                        ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideX(begin: -0.05, end: 0),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          'How can I help today?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
+                            letterSpacing: -0.6,
+                            height: 1.2,
+                          ),
+                        ).animate().fadeIn(duration: 450.ms, delay: 150.ms).slideX(begin: -0.05, end: 0),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          'I’m here to help — from quick answers to smart recommendations.',
+                          style: GoogleFonts.inter(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w400,
+                            color: isDark ? AppColors.darkTextTertiary : const Color(0xFF8E918F),
+                            height: 1.4,
+                          ),
+                        ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
+
+                        const SizedBox(height: 24),
+
+                        // 2x2 Feature Action Cards Grid matching Screen 1
+                        _buildFeatureGrid(isDark),
+
+                        const SizedBox(height: 20),
+
+                        // Unlock More Features with Pro Banner
+                        _buildProBanner(isDark),
+
+                        const SizedBox(height: 16),
+
+                        // Squircle Input Box matching Screen 1
+                        _buildInputBox(isDark),
+
+                        const SizedBox(height: 100), // Spacing for floating bottom bar
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildQuickChip(String label, bool isDark) {
-    return GestureDetector(
-      onTap: () => _openTextChat(query: label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLiveWeatherCard(BuildContext context, {required WeatherProvider weatherProv, required WeatherData weather, required bool isDark}) {
-    if (weatherProv.isLoading) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildFeatureGrid(bool isDark) {
+    return Column(
+      children: [
+        Row(
           children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(AppColors.geminiBlue),
+            Expanded(
+              child: _buildFeatureCard(
+                iconName: 'surprise',
+                title: 'Surprise me!',
+                subtitle: 'Surprise me with a creative idea or story.',
+                delayMs: 250,
+                isDark: isDark,
+                onTap: () => _openTextChat(query: 'Surprise me with a fascinating weather anomaly or creative climate story!'),
               ),
             ),
             const SizedBox(width: 14),
-            Text(
-              'Connecting to atmospheric telemetry...',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            Expanded(
+              child: _buildFeatureCard(
+                iconName: 'image',
+                title: 'Create image',
+                subtitle: 'Create an image from your idea or prompt.',
+                delayMs: 300,
+                isDark: isDark,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MapScreen()),
+                  );
+                },
               ),
             ),
           ],
         ),
-      );
-    }
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _buildFeatureCard(
+                iconName: 'document',
+                title: 'Summarise',
+                subtitle: 'Summarise a document or text in seconds.',
+                delayMs: 350,
+                isDark: isDark,
+                onTap: () => _openTextChat(query: 'Summarise current climate conditions, rain probability, and agriculture safety for today.'),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _buildFeatureCard(
+                iconName: 'lightning',
+                title: 'Generate ideas',
+                subtitle: 'Brainstorm concepts, names, features.',
+                delayMs: 400,
+                isDark: isDark,
+                onTap: () => _openTextChat(query: 'Brainstorm travel recommendations and outdoor activity timing based on the forecast.'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
+  Widget _buildFeatureCard({
+    required String iconName,
+    required String title,
+    required String subtitle,
+    required int delayMs,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return IosBouncingButton(
+      onTap: onTap,
+      child: Container(
+        height: 146,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.2)
+                  : const Color(0xFF7C3AED).withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Icon
+            IosSvgIcon(
+              iconName,
+              size: 24,
+              color: isDark ? Colors.white : AppColors.iosBlack,
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w400,
+                    color: isDark ? AppColors.darkTextTertiary : const Color(0xFF737380),
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 400.ms, delay: delayMs.ms).slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic);
+  }
+
+  Widget _buildProBanner(bool isDark) {
+    return IosBouncingButton(
+      onTap: _openGeminiLive,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF1E1E28)
+              : const Color(0xFFF7F3FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFDDD6FE),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            const IosSvgIcon(
+              'lightning',
+              size: 16,
+              color: Color(0xFF7C3AED),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Unlock more features with Pro & Live Voice',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF5B21B6),
+                ),
+              ),
+            ),
+            const IosSvgIcon(
+              'arrow_right',
+              size: 14,
+              color: Color(0xFF7C3AED),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 450.ms, delay: 450.ms);
+  }
+
+  Widget _buildInputBox(bool isDark) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        color: isDark ? AppColors.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(26),
         border: Border.all(
           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black45 : Colors.black.withValues(alpha: 0.05),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.3)
+                : const Color(0xFF936DFF).withValues(alpha: 0.06),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
         ],
       ),
+      padding: const EdgeInsets.fromLTRB(18, 14, 12, 12),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          TextField(
+            controller: _inputController,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Ask me anything ...',
+              hintStyle: GoogleFonts.inter(
+                fontSize: 14.5,
+                color: isDark ? AppColors.darkTextTertiary : const Color(0xFFA1A1AA),
+              ),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onSubmitted: (_) => _submitInput(),
+          ),
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_rounded, size: 17, color: AppColors.geminiBlue),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            weather.location.name,
-                            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 16),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      weather.conditionDescription,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              // Left tool shortcuts
+              Row(
+                children: [
+                  IosBouncingButton(
+                    onTap: () {},
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: IosSvgIcon(
+                        'paperclip',
+                        size: 20,
+                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 4),
+                  IosBouncingButton(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: IosSvgIcon(
+                        'sliders',
+                        size: 20,
+                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                '${weather.temperature.toStringAsFixed(1)}°C',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 34,
-                  letterSpacing: -1,
-                ),
+
+              // Right Mic + Black Circular Send Button
+              Row(
+                children: [
+                  IosBouncingButton(
+                    onTap: _openGeminiLive,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: IosSvgIcon(
+                        'mic',
+                        size: 20,
+                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IosBouncingButton(
+                    onTap: _submitInput,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.iosBlack,
+                      ),
+                      child: const Center(
+                        child: IosSvgIcon(
+                          'send',
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-
-          // 4 Grid Stats
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('Precip', '${weather.rainfallAmount.toStringAsFixed(1)} mm', Icons.water_drop_outlined, isDark),
-              _buildStatItem('Humidity', '${weather.humidity.toStringAsFixed(0)}%', Icons.opacity_rounded, isDark),
-              _buildStatItem('Wind', '${weather.windSpeed.toStringAsFixed(1)} km/h', Icons.air_rounded, isDark),
-              _buildStatItem('Wind Dir', '${weather.windDirection.toInt()}°', Icons.explore_outlined, isDark),
             ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon, bool isDark) {
-    return Column(
-      children: [
-        Icon(icon, size: 19, color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8)),
-        const SizedBox(height: 5),
-        Text(
-          value,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHourlyForecastStrip(BuildContext context, {required WeatherData weather, required bool isDark}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            'HOURLY RAIN & TEMPERATURE TIMELINE',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-              color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 100,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: weather.hourlyForecast.length.clamp(0, 16),
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (ctx, i) {
-              final item = weather.hourlyForecast[i];
-              final hourStr = '${item.time.hour.toString().padLeft(2, '0')}:00';
-              return Container(
-                width: 72,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Text(hourStr, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600)),
-                    Text('${item.temperature.toStringAsFixed(0)}°', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w800)),
-                    Text('${item.rainProbability.toStringAsFixed(0)}% 🌧️', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isDark ? AppColors.geminiCyan : const Color(0xFF1A73E8))),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
+    ).animate().fadeIn(duration: 500.ms, delay: 500.ms).slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic);
   }
 }

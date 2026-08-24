@@ -117,7 +117,7 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Gemini Synced',
+                          'Cloud Synced',
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,

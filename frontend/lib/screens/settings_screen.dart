@@ -230,8 +230,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildSwitchTile(
                         context,
                         icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                        title: 'Dark Mode (Gemini Charcoal)',
-                        subtitle: isDark ? 'Gemini charcoal OLED theme' : 'Frosted cloud light theme',
+                        title: 'Dark Mode (Obsidian)',
+                        subtitle: isDark ? 'Obsidian dark theme' : 'Ethereal lavender light theme',
                         value: isDark,
                         onChanged: (val) => themeProv.toggleTheme(),
                       ),
@@ -404,7 +404,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Powered by Google Gemini & Open-Meteo API',
+                          'Powered by Weather Intelligence & Open-Meteo API',
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_colors.dart';
-import '../widgets/gemini_sparkle_icon.dart';
+import '../widgets/ios_svg_icon.dart';
+import '../widgets/ios_bouncing_button.dart';
 import 'auth_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -15,27 +16,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<({String title, String subtitle, IconData icon, Color iconColor, String tag})> _slides = [
+  final List<({String title, String subtitle, String icon, Color iconColor, String tag})> _slides = [
     (
       title: 'Talk to Weather\nNaturally',
-      subtitle: 'No complex charts or radar grids needed. Just ask WeatherGPT like a human AI companion.',
-      icon: Icons.auto_awesome_rounded,
-      iconColor: AppColors.geminiCyan,
-      tag: 'GEMINI LIVE & VOICE FIRST',
+      subtitle: 'No complex charts needed. Just ask your AI companion with natural real-time voice.',
+      icon: 'surprise',
+      iconColor: Color(0xFF7C3AED),
+      tag: 'VOICE FIRST INTELLIGENCE',
     ),
     (
-      title: 'Agricultural & Travel\nIntelligence',
-      subtitle: 'Get actionable spray windows, irrigation timing, and destination highway risk briefings.',
-      icon: Icons.agriculture_rounded,
-      iconColor: Color(0xFF00FF87),
-      tag: 'METEOROLOGICAL GROUNDING',
+      title: 'Agricultural & Travel\nBriefings',
+      subtitle: 'Get actionable spray windows, irrigation timing, and destination travel safety risk briefings.',
+      icon: 'document',
+      iconColor: Color(0xFF10B981),
+      tag: 'METEOROLOGICAL PRECISION',
     ),
     (
-      title: 'Instant Early\nWarning Alerts',
-      subtitle: 'Stay safe with proactive NDMA SACHET disaster advisories before convective storms or heatwaves.',
-      icon: Icons.warning_amber_rounded,
-      iconColor: Color(0xFFFF758C),
-      tag: 'REAL-TIME TELEMETRY',
+      title: 'Proactive Early\nWarning Alerts',
+      subtitle: 'Stay safe with real-time disaster advisories before severe convective storms or heatwaves.',
+      icon: 'bell',
+      iconColor: Color(0xFFEC4899),
+      tag: 'REAL-TIME RADAR TELEMETRY',
     ),
   ];
 
@@ -73,7 +74,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Column(
                   children: [
-                    // Top Bar: Gemini Sparkle + Skip Button
+                    // Top Bar: Sparkle + Skip Button
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       child: Row(
@@ -81,20 +82,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         children: [
                           Row(
                             children: [
-                              const GeminiSparkleIcon(size: 22),
+                              const IosSvgIcon('sparkles', size: 20, color: Color(0xFF7C3AED)),
                               const SizedBox(width: 8),
                               Text(
                                 'WeatherGPT',
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 15,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                                 ),
                               ),
                             ],
                           ),
-                          TextButton(
-                            onPressed: _handleSkipToHome,
+                          IosBouncingButton(
+                            onTap: _handleSkipToHome,
                             child: Text(
                               'Skip',
                               style: GoogleFonts.inter(
@@ -140,7 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 0.6,
-                                      color: AppColors.geminiBlue,
+                                      color: const Color(0xFF7C3AED),
                                     ),
                                   ),
                                 ),
@@ -148,27 +149,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
                                 // Center Icon Visual Card
                                 Container(
-                                  width: 110,
-                                  height: 110,
+                                  width: 100,
+                                  height: 100,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                                    color: isDark ? AppColors.darkSurface : Colors.white,
                                     border: Border.all(
                                       color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                                       width: 1.5,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: slide.iconColor.withValues(alpha: 0.2),
-                                        blurRadius: 30,
+                                        color: slide.iconColor.withValues(alpha: 0.18),
+                                        blurRadius: 28,
                                         spreadRadius: 4,
                                       ),
                                     ],
                                   ),
                                   child: Center(
-                                    child: Icon(
+                                    child: IosSvgIcon(
                                       slide.icon,
-                                      size: 46,
+                                      size: 38,
                                       color: slide.iconColor,
                                     ),
                                   ),
@@ -218,7 +219,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           height: 6,
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppColors.geminiBlue
+                                ? const Color(0xFF7C3AED)
                                 : (isDark ? Colors.white12 : Colors.black12),
                             borderRadius: BorderRadius.circular(3),
                           ),
@@ -227,27 +228,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     const SizedBox(height: 36),
 
-                    // Authentication Interface: Google Sign-In & Guest Button
+                    // Authentication Interface: Sign In & Guest Button
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
                         children: [
                           // "Sign In / Register" Button
-                          GestureDetector(
+                          IosBouncingButton(
                             onTap: _navigateToAuth,
                             child: Container(
                               width: double.infinity,
                               height: 52,
                               decoration: BoxDecoration(
-                                color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
-                                borderRadius: BorderRadius.circular(28),
+                                color: isDark ? AppColors.darkSurfaceElevated : Colors.white,
+                                borderRadius: BorderRadius.circular(26),
                                 border: Border.all(
                                   color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                                   width: 1.2,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: isDark ? Colors.black45 : Colors.black.withValues(alpha: 0.05),
+                                    color: Colors.black.withValues(alpha: 0.04),
                                     blurRadius: 16,
                                     offset: const Offset(0, 4),
                                   ),
@@ -256,16 +257,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.person_outline_rounded,
+                                  IosSvgIcon(
+                                    'user',
                                     color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                    size: 20,
+                                    size: 18,
                                   ),
                                   const SizedBox(width: 10),
                                   Text(
                                     'Sign In or Create Account',
                                     style: GoogleFonts.inter(
-                                      fontSize: 15,
+                                      fontSize: 14.5,
                                       fontWeight: FontWeight.w600,
                                       color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                                     ),
@@ -276,18 +277,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // "Continue as Guest" Button (Gemini Gradient CTA)
-                          GestureDetector(
+                          // "Continue as Guest" Button
+                          IosBouncingButton(
                             onTap: _handleSkipToHome,
                             child: Container(
                               width: double.infinity,
                               height: 52,
                               decoration: BoxDecoration(
-                                gradient: AppColors.geminiSparkleGradient,
-                                borderRadius: BorderRadius.circular(28),
+                                color: AppColors.iosBlack,
+                                borderRadius: BorderRadius.circular(26),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.geminiBlue.withValues(alpha: 0.35),
+                                    color: Colors.black.withValues(alpha: 0.25),
                                     blurRadius: 14,
                                     offset: const Offset(0, 4),
                                   ),
@@ -298,7 +299,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   'Get Started as Guest',
                                   style: GoogleFonts.inter(
                                     color: Colors.white,
-                                    fontSize: 15,
+                                    fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
