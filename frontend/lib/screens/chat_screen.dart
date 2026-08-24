@@ -85,6 +85,7 @@ class _ChatScreenState extends State<ChatScreen> {
           queryText,
           lat: weatherProv.weatherData.location.latitude,
           lon: weatherProv.weatherData.location.longitude,
+          locationName: weatherProv.weatherData.location.name,
           activePersona: contextProv.currentPersona.name,
         );
 

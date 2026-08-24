@@ -67,8 +67,16 @@ def init_tool_context() -> ToolExecutionContext:
 
 
 async def _resolve_location(location: str) -> tuple[float, float, str]:
-    """Helper to geocode city names with local caching."""
-    clean_loc = (location or "New Delhi, India").strip()
+    """Helper to geocode city names with local caching, prioritizing user's live coordinates."""
+    ctx = get_current_tool_context()
+    generic_words = {"here", "my location", "current location", "current", "this location", "khet", "farm", "city", "village", "town", "home", "my area", ""}
+    clean_loc = (location or "").strip()
+
+    # If location is generic or empty, use user's resolved live location immediately
+    if (not clean_loc or clean_loc.lower() in generic_words) and ctx.resolved_lat is not None and ctx.resolved_lon is not None:
+        return (ctx.resolved_lat, ctx.resolved_lon, ctx.resolved_location_name or "My Location")
+
+    clean_loc = clean_loc or (ctx.resolved_location_name or "New Delhi, India")
     key = clean_loc.lower()
     if key in _GEOCODE_CACHE:
         return _GEOCODE_CACHE[key]
@@ -77,6 +85,12 @@ async def _resolve_location(location: str) -> tuple[float, float, str]:
     if geocoded:
         lat, lon, name = geocoded
         res = (lat, lon, name)
+        _GEOCODE_CACHE[key] = res
+        return res
+
+    # Fallback to user live location if geocoding fails
+    if ctx.resolved_lat is not None and ctx.resolved_lon is not None:
+        res = (ctx.resolved_lat, ctx.resolved_lon, ctx.resolved_location_name or clean_loc)
         _GEOCODE_CACHE[key] = res
         return res
 

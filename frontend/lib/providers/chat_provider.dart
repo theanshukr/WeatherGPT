@@ -27,6 +27,7 @@ class ChatProvider with ChangeNotifier {
     String text, {
     double? lat,
     double? lon,
+    String? locationName,
     String? activePersona,
   }) async {
     final queryText = text.trim();
@@ -44,15 +45,21 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      double targetLat = lat ?? 28.6139;
-      double targetLon = lon ?? 77.2090;
+      double targetLat = lat ?? 0.0;
+      double targetLon = lon ?? 0.0;
+      String? targetLocName = locationName;
 
-      if (lat == null || lon == null) {
+      if (targetLat == 0.0 || targetLon == 0.0 || targetLocName == null || targetLocName.isEmpty || targetLocName == 'Loading...') {
         try {
           final loc = await _locationService.getCurrentLocation();
           targetLat = loc.latitude;
           targetLon = loc.longitude;
-        } catch (_) {}
+          targetLocName = loc.name;
+        } catch (_) {
+          targetLat = targetLat != 0.0 ? targetLat : 28.6139;
+          targetLon = targetLon != 0.0 ? targetLon : 77.2090;
+          targetLocName = 'My Location';
+        }
       }
 
       ChatMessage? aiResponse;
@@ -63,6 +70,7 @@ class ChatProvider with ChangeNotifier {
             query: queryText,
             latitude: targetLat,
             longitude: targetLon,
+            locationName: targetLocName,
             activePersona: activePersona,
             sessionId: _sessionId,
             userId: SupabaseService.currentUserId,

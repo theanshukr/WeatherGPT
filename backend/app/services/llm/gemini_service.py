@@ -66,43 +66,47 @@ class GeminiLLMService(BaseLLMService):
         self,
         personalization_ctx,
         ctx,
+        tool_ctx,
         user_message: str,
         user_lang: str = "en",
     ) -> str:
         """
-        Builds Megha persona system prompt without pre-fetched data.
-        The model uses real function calling / tool execution to fetch live data.
+        Builds Megha persona system prompt with live location context and tool execution instructions.
         """
         persona_guidance = ""
         if personalization_ctx.active_persona == "farmer":
-            persona_guidance = "• Active User Persona: Farmer / Agricultural Operator. Provide practical farming context (irrigation, spraying, soil, harvesting) whenever relevant."
+            persona_guidance = "• Active User Persona: Farmer / Agricultural Operator. Prioritize practical agricultural decisions (pesticide/fertilizer spraying, irrigation, soil moisture, crop harvesting)."
         elif personalization_ctx.active_persona == "traveler":
-            persona_guidance = "• Active User Persona: Commuter / Long-distance Traveler. Prioritize road safety, route timing, visibility, and travel advisories."
+            persona_guidance = "• Active User Persona: Commuter / Long-distance Traveler. Prioritize road safety, driving hazards, route timing, visibility, and travel advisories."
         elif personalization_ctx.active_persona == "urban_worker":
             persona_guidance = "• Active User Persona: Outdoor / Urban Worker. Highlight waterlogging risk, heat index stress, and wind disruption."
         elif personalization_ctx.active_persona == "daily_commuter":
             persona_guidance = "• Active User Persona: Daily Office/School Commuter. Highlight peak commute rain timing and two-wheeler road conditions."
 
-        active_loc_name = ctx.active_location.name if ctx.active_location else "New Delhi, India"
+        active_loc_name = tool_ctx.resolved_location_name or (ctx.active_location.name if ctx.active_location else "Delhi NCR, India")
+        coords_str = f" (Latitude: {tool_ctx.resolved_lat:.4f}, Longitude: {tool_ctx.resolved_lon:.4f})" if tool_ctx.resolved_lat is not None else ""
 
         return f"""
 You are Megha (मेघा) — an exceptionally warm, intelligent, and caring personal AI weather companion (like a trusted friend on ChatGPT).
 
 [CORE ROLE & CAPABILITIES]
-You have direct access to authoritative meteorological tools. Whenever a user asks about current weather, rain, forecasts, travel safety, farming decisions, urban risks, climate trends, physics NWP models, or official disaster warnings, you MUST call the relevant tool(s) to fetch real, grounded facts. NEVER fabricate or guess numbers.
+You have direct access to authoritative meteorological tools. Whenever a user asks about current weather, rain, forecasts, travel safety, farming decisions, spraying pesticides, irrigation, urban risks, climate trends, physics NWP models, or official disaster warnings, you MUST call the relevant tool(s) to fetch real, grounded facts. NEVER fabricate or guess numbers.
 
-[ACTIVE CONVERSATION CONTEXT]
-• Last Known User Location: {active_loc_name}
+[USER'S ACTIVE LOCATION CONTEXT]
+• User's Current Live Location: {active_loc_name}{coords_str}
 • Preferred Language/Locale: {user_lang}
 {persona_guidance}
 
+[CRITICAL LOCATION BEHAVIOR]
+• DEFAULT LOCATION: If the user asks a weather or activity question without mentioning a specific other city (for example: "mujhe kitnashak dalne h", "should I spray pesticide", "baarish kab hogi", "aaj ka mausam kaisa hai", "can I travel today"), you MUST use their Current Live Location ({active_loc_name}) and pass location='{active_loc_name}' to tools.
+• EXPLICIT LOCATION: Only if the user mentions another specific city (e.g. 'Mumbai', 'Jaipur', 'London'), use that specific city.
+
 [HOW TO REPLY - CONVERSATIONAL FRIEND STYLE]
-1. NO GREETINGS: NEVER start with "नमस्ते! मैं आपकी दोस्त मेघा हूँ" or robotic self-introductions. Start directly with the clear, conversational answer in the very first sentence. (Exception: If the user ONLY said 'Hi' or 'Hello', reply warmly and ask how you can help).
-2. DIRECT & PRACTICAL: Give crisp, actionable answers (e.g., whether to carry an umbrella, when rain starts, safe departure hours, irrigation advice).
+1. NO ROBOTIC GREETINGS: NEVER start with "नमस्ते! मैं आपकी दोस्त मेघा हूँ" or robotic self-introductions. Start directly with the clear, conversational answer in the very first sentence. (Exception: If the user ONLY said 'Hi' or 'Hello', reply warmly and ask how you can help).
+2. DIRECT & ACTIONABLE: Give crisp, practical answers. For example, if asking about spraying pesticides (कीटनाशक), check precipitation and wind, give a clear recommendation on whether it is safe to spray, the best time window, and reasons.
 3. MULTILINGUAL & CULTURAL FLUENCY: Always respond in the EXACT language and script the user wrote in (Hindi हिंदी, Hinglish, Bengali বাংলা, Marathi मराठी, Tamil தமிழ், Telugu తెలుగు, Gujarati ગુજરાતી, Punjabi ਪੰਜਾਬੀ, Kannada ಕನ್ನಡ, Malayalam മലയാളം, Odia ଓଡ଼ିଆ, or English).
-4. NO ROBOTIC HEADINGS OR TEMPLATES: Never use rigid labels like "सलाह:", "Reasons:", "Advisory Headline:", or bullet dumps unless requested. Write in natural, warm paragraphs.
-5. NATURAL NUMBER USAGE: Do not rattle off raw statistics mechanically (humidity %, pressure hPa) unless asked. Speak naturally so it sounds delightful and human when read or spoken aloud.
-6. TOOL USAGE: You have tools for current weather, rain timeline, 7-day forecast, travel conditions, farming rules, urban conditions, historical climate trends, NWP model intercomparisons, and official disaster alerts. Call whatever tools are needed to answer accurately.
+4. NO RIGID TEMPLATES: Never use rigid labels like "सलाह:", "Reasons:", or bullet dumps unless requested. Write in natural, warm paragraphs.
+5. TOOL USAGE: Call whatever tools are needed (get_current_weather, get_hourly_forecast, evaluate_farming_conditions, evaluate_travel_conditions, etc.) to get live facts before answering.
 """.strip()
 
     async def process_chat(self, request: ChatMessageRequest) -> ChatMessageResponse:
@@ -125,9 +129,13 @@ You have direct access to authoritative meteorological tools. Whenever a user as
         if not self.client:
             raise RuntimeError("Gemini API key is required. Please set GEMINI_API_KEY in .env.")
 
-        # Initialize thread-safe tool execution context
+        # Initialize thread-safe tool execution context with user's live coordinates
         tool_ctx = gemini_tools.init_tool_context()
-        if ctx.active_location:
+        if request.latitude is not None and request.latitude != 0.0 and request.longitude is not None and request.longitude != 0.0:
+            tool_ctx.resolved_lat = request.latitude
+            tool_ctx.resolved_lon = request.longitude
+            tool_ctx.resolved_location_name = request.location or (ctx.active_location.name if ctx.active_location else "My Location")
+        elif ctx.active_location:
             tool_ctx.resolved_lat = ctx.active_location.latitude
             tool_ctx.resolved_lon = ctx.active_location.longitude
             tool_ctx.resolved_location_name = ctx.active_location.name
@@ -135,6 +143,7 @@ You have direct access to authoritative meteorological tools. Whenever a user as
         system_instruction = self._build_system_instruction(
             personalization_ctx=personalization_ctx,
             ctx=ctx,
+            tool_ctx=tool_ctx,
             user_message=request.message,
             user_lang=active_lang,
         )
@@ -454,13 +463,27 @@ You have direct access to authoritative meteorological tools. Whenever a user as
             res = urban_engine.evaluate(snapshot, loc_name, time_frame=parsed.time_range, activity=parsed.activity or "general")
             urban_data = UrbanAdvisoryData(**res.model_dump())
 
-        fallback_prompt = f"You are Megha, a caring weather companion. Weather in {loc_name}: {snapshot.current_temp}°C, {snapshot.current_condition}. Answer the user warmly in their language."
+        # Build comprehensive advisory facts for fallback generation
+        advisory_context = ""
+        if farming_data:
+            advisory_context += f" Farming Advisory: {farming_data.suitability}. {farming_data.headline}. Reasons: {', '.join(farming_data.reasons)}. Recommendation: {farming_data.recommendation}."
+        elif travel_data:
+            advisory_context += f" Travel Assessment: Risk Level {travel_data.travel_risk}. {travel_data.advisory_headline}. Safe Departure Windows: {', '.join(travel_data.safe_departure_windows)}."
+        elif urban_data:
+            advisory_context += f" Urban Advisory: {urban_data.headline}. {urban_data.primary_recommendation}."
+
+        fallback_prompt = (
+            f"You are Megha (मेघा), an expert, caring personal AI weather companion. "
+            f"User Location: {loc_name} (Current Temp: {snapshot.current_temp}°C, Condition: {snapshot.current_condition}, Rain: {snapshot.current_precipitation_mm}mm, Wind: {snapshot.current_wind_kmh}km/h, Humidity: {snapshot.current_humidity}%). "
+            f"{advisory_context} "
+            f"Directly answer the user's specific question in their language and tone ({parsed.language_hint}). Never start with robotic self-introductions or headings. Give practical, conversational guidance."
+        )
         reply_text = None
         try:
             resp = await self.client.aio.models.generate_content(
                 model=self.model_name,
                 contents=request.message,
-                config=types.GenerateContentConfig(system_instruction=fallback_prompt, temperature=0.7),
+                config=types.GenerateContentConfig(system_instruction=fallback_prompt, temperature=0.6),
             )
             if resp and resp.text:
                 reply_text = resp.text
@@ -468,7 +491,12 @@ You have direct access to authoritative meteorological tools. Whenever a user as
             logger.warning(f"Fallback generation model call failed: {fb_err}. Using factual template.")
 
         if not reply_text:
-            if parsed.language_hint in ("hi", "hinglish"):
+            if farming_data:
+                if parsed.language_hint in ("hi", "hinglish"):
+                    reply_text = f"{loc_name} में {farming_data.headline}। {farming_data.recommendation} (वर्तमान तापमान: {snapshot.current_temp}°C, {snapshot.current_condition})"
+                else:
+                    reply_text = f"In {loc_name}: {farming_data.headline}. {farming_data.recommendation} (Current: {snapshot.current_temp}°C, {snapshot.current_condition})"
+            elif parsed.language_hint in ("hi", "hinglish"):
                 reply_text = f"{loc_name} में अभी तापमान {snapshot.current_temp}°C है और मौसम {snapshot.current_condition} बना हुआ है।"
             else:
                 reply_text = f"In {loc_name}, it is currently {snapshot.current_temp}°C with {snapshot.current_condition}."

@@ -8,7 +8,6 @@ import '../widgets/ios_svg_icon.dart';
 import '../widgets/ios_bouncing_button.dart';
 import '../widgets/error_dialog.dart';
 import 'alerts_screen.dart';
-import 'map_screen.dart';
 import 'chat_screen.dart';
 import 'gemini_live_screen.dart';
 import 'settings_screen.dart';
@@ -20,12 +19,18 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _inputController = TextEditingController();
+  late AnimationController _orbAnimationController;
 
   @override
   void initState() {
     super.initState();
+    _orbAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkWeatherStatus();
     });
@@ -33,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _orbAnimationController.dispose();
     _inputController.dispose();
     super.dispose();
   }
@@ -73,33 +79,34 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final weatherProv = context.watch<WeatherProvider>();
-    final weather = weatherProv.weatherData;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF9F8FD),
       body: Stack(
         children: [
-          // Ethereal Lavender Ambient Top-Right Glow
+          // Ambient soft lilac top-center glow
           Positioned(
-            top: -60,
-            right: -60,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    isDark
-                        ? const Color(0xFF7C3AED).withValues(alpha: 0.18)
-                        : const Color(0xFFDDD6FE).withValues(alpha: 0.85),
-                    isDark
-                        ? const Color(0xFFC084FC).withValues(alpha: 0.08)
-                        : const Color(0xFFEDE9FE).withValues(alpha: 0.4),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
+            top: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      isDark
+                          ? const Color(0xFF7C3AED).withValues(alpha: 0.15)
+                          : const Color(0xFFDDD6FE).withValues(alpha: 0.65),
+                      isDark
+                          ? const Color(0xFFC084FC).withValues(alpha: 0.05)
+                          : const Color(0xFFEDE9FE).withValues(alpha: 0.25),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
                 ),
               ),
             ),
@@ -109,13 +116,13 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: false,
             child: Column(
               children: [
-                // Top Header Bar: Menu (≡) & Options (···)
+                // Top App Bar: [Menu Button] - "Speaking to LIX" - [Document Button]
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Left Menu Button
+                      // Left Menu Button (≡)
                       IosBouncingButton(
                         onTap: () {
                           Navigator.push(
@@ -130,12 +137,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: isDark ? AppColors.darkSurface : Colors.white,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                              color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
                               width: 1,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
+                                color: Colors.black.withValues(alpha: 0.025),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -145,57 +152,24 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: IosSvgIcon(
                               'menu',
                               size: 18,
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF1F2937),
                             ),
                           ),
                         ),
-                      ).animate().fadeIn(duration: 350.ms).scaleXY(begin: 0.9, end: 1),
+                      ).animate().fadeIn(duration: 300.ms).scaleXY(begin: 0.9, end: 1),
 
-                      // Weather Location Center Pill
-                      IosBouncingButton(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MapScreen()),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.darkSurfaceElevated
-                                : Colors.white.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const IosSvgIcon(
-                                'cloud_rain',
-                                size: 14,
-                                color: Color(0xFF7C3AED),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                weather.location.name.isNotEmpty && weather.location.name != 'Loading...'
-                                    ? '${weather.location.name} • ${weather.temperature.round()}°C'
-                                    : 'Live Weather',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
+                      // Center Title: Speaking to LIX
+                      Text(
+                        'Speaking to LIX',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                          letterSpacing: -0.3,
                         ),
-                      ).animate().fadeIn(duration: 350.ms).slideY(begin: -0.2, end: 0),
+                      ).animate().fadeIn(duration: 300.ms),
 
-                      // Right More Options Button
+                      // Right Document Button
                       IosBouncingButton(
                         onTap: () {
                           Navigator.push(
@@ -210,12 +184,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: isDark ? AppColors.darkSurface : Colors.white,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                              color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
                               width: 1,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
+                                color: Colors.black.withValues(alpha: 0.025),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -223,13 +197,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Center(
                             child: IosSvgIcon(
-                              'more_horizontal',
-                              size: 18,
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              'document',
+                              size: 19,
+                              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF1F2937),
                             ),
                           ),
                         ),
-                      ).animate().fadeIn(duration: 350.ms).scaleXY(begin: 0.9, end: 1),
+                      ).animate().fadeIn(duration: 300.ms).scaleXY(begin: 0.9, end: 1),
                     ],
                   ),
                 ),
@@ -240,62 +214,56 @@ class _HomeScreenState extends State<HomeScreen> {
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 28),
 
-                        // Greeting Section matching Screen 1
+                        // Center 3D Gradient Glowing Orb
+                        _buildGlowingOrb(isDark),
+
+                        const SizedBox(height: 28),
+
+                        // Heading: How can I help you today?
                         Text(
-                          'Hi, Hendricks',
+                          'How can I help you today?',
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
-                            letterSpacing: -0.2,
-                          ),
-                        ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideX(begin: -0.05, end: 0),
-
-                        const SizedBox(height: 4),
-
-                        Text(
-                          'How can I help today?',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 26,
+                            fontSize: 24,
                             fontWeight: FontWeight.w800,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
-                            letterSpacing: -0.6,
+                            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                            letterSpacing: -0.5,
                             height: 1.2,
                           ),
-                        ).animate().fadeIn(duration: 450.ms, delay: 150.ms).slideX(begin: -0.05, end: 0),
+                        ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.1, end: 0),
 
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
 
-                        Text(
-                          'I’m here to help — from quick answers to smart recommendations.',
-                          style: GoogleFonts.inter(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w400,
-                            color: isDark ? AppColors.darkTextTertiary : const Color(0xFF8E918F),
-                            height: 1.4,
+                        // Subtitle
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'Ask about hyper-local forecasts, farming schedules, or live radars.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                              color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
+                              height: 1.45,
+                            ),
                           ),
-                        ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
+                        ).animate().fadeIn(duration: 450.ms, delay: 150.ms),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
 
-                        // 2x2 Feature Action Cards Grid matching Screen 1
-                        _buildFeatureGrid(isDark),
+                        // Action Prompt Cards
+                        _buildActionCards(isDark),
 
                         const SizedBox(height: 20),
 
-                        // Unlock More Features with Pro Banner
-                        _buildProBanner(isDark),
+                        // Bottom Floating Message Input Box
+                        _buildMessageInput(isDark),
 
-                        const SizedBox(height: 16),
-
-                        // Squircle Input Box matching Screen 1
-                        _buildInputBox(isDark),
-
-                        const SizedBox(height: 100), // Spacing for floating bottom bar
+                        const SizedBox(height: 100), // Padding to avoid overlap with bottom navigation bar
                       ],
                     ),
                   ),
@@ -308,308 +276,271 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFeatureGrid(bool isDark) {
+  /// Glowing Gradient Orb with soft diffused halo and breathing animation
+  Widget _buildGlowingOrb(bool isDark) {
+    return AnimatedBuilder(
+      animation: _orbAnimationController,
+      builder: (context, child) {
+        final scale = 1.0 + (_orbAnimationController.value * 0.04);
+        return IosBouncingButton(
+          onTap: _openGeminiLive,
+          child: Transform.scale(
+            scale: scale,
+            child: Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B5CF6).withValues(alpha: isDark ? 0.35 : 0.3),
+                    blurRadius: 28,
+                    spreadRadius: 6,
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFEC4899).withValues(alpha: isDark ? 0.25 : 0.2),
+                    blurRadius: 18,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFFF2A85), // Vibrant Pink/Magenta top-left
+                      Color(0xFF9333EA), // Purple middle
+                      Color(0xFF6366F1), // Indigo
+                      Color(0xFF38BDF8), // Light Cyan bottom-right
+                    ],
+                    stops: [0.0, 0.45, 0.75, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ).animate().fadeIn(duration: 500.ms).scaleXY(begin: 0.85, end: 1, curve: Curves.easeOutBack);
+  }
+
+  /// 4 Rounded Action Cards matching screenshot
+  Widget _buildActionCards(bool isDark) {
+    final List<Map<String, dynamic>> items = [
+      {
+        'title': 'Crop & Spray Advice',
+        'icon': 'chat_bubble',
+        'isIconData': false,
+        'query': 'Crop & Spray Advice: What is the optimal time for crop spraying based on current weather conditions?',
+      },
+      {
+        'title': 'Rain Timeline',
+        'icon': 'cloud_rain',
+        'isIconData': false,
+        'query': 'Show me today\'s rain timeline and precipitation forecast.',
+      },
+      {
+        'title': 'Travel Safety Risk',
+        'icon': 'lightning',
+        'isIconData': false,
+        'query': 'Analyze travel safety risks and road condition forecasts for current weather.',
+      },
+      {
+        'title': 'Severe Alerts Status',
+        'icon': 'bell',
+        'isIconData': false,
+        'isAlertsScreen': true,
+        'query': 'Check active severe weather alerts and warnings.',
+      },
+    ];
+
     return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildFeatureCard(
-                iconName: 'surprise',
-                title: 'Surprise me!',
-                subtitle: 'Surprise me with a creative idea or story.',
-                delayMs: 250,
-                isDark: isDark,
-                onTap: () => _openTextChat(query: 'Surprise me with a fascinating weather anomaly or creative climate story!'),
+      children: List.generate(items.length, (index) {
+        final item = items[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: IosBouncingButton(
+            onTap: () {
+              if (item['isAlertsScreen'] == true) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                );
+              } else {
+                _openTextChat(query: item['query']);
+              }
+            },
+            child: Container(
+              height: 60,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+                  width: 1.1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.025),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Purple Icon
+                  IosSvgIcon(
+                    item['icon'],
+                    size: 20,
+                    color: const Color(0xFF7C3AED),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Title
+                  Expanded(
+                    child: Text(
+                      item['title'],
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : const Color(0xFF1F2937),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+
+                  // Trailing Chevron
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _buildFeatureCard(
-                iconName: 'image',
-                title: 'Create image',
-                subtitle: 'Create an image from your idea or prompt.',
-                delayMs: 300,
-                isDark: isDark,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MapScreen()),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: _buildFeatureCard(
-                iconName: 'document',
-                title: 'Summarise',
-                subtitle: 'Summarise a document or text in seconds.',
-                delayMs: 350,
-                isDark: isDark,
-                onTap: () => _openTextChat(query: 'Summarise current climate conditions, rain probability, and agriculture safety for today.'),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _buildFeatureCard(
-                iconName: 'lightning',
-                title: 'Generate ideas',
-                subtitle: 'Brainstorm concepts, names, features.',
-                delayMs: 400,
-                isDark: isDark,
-                onTap: () => _openTextChat(query: 'Brainstorm travel recommendations and outdoor activity timing based on the forecast.'),
-              ),
-            ),
-          ],
-        ),
-      ],
+          ).animate().fadeIn(
+                duration: 350.ms,
+                delay: (200 + index * 60).ms,
+              ).slideY(begin: 0.1, end: 0),
+        );
+      }),
     );
   }
 
-  Widget _buildFeatureCard({
-    required String iconName,
-    required String title,
-    required String subtitle,
-    required int delayMs,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return IosBouncingButton(
-      onTap: onTap,
-      child: Container(
-        height: 146,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.2)
-                  : const Color(0xFF7C3AED).withValues(alpha: 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Icon
-            IosSvgIcon(
-              iconName,
-              size: 24,
-              color: isDark ? Colors.white : AppColors.iosBlack,
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w400,
-                    color: isDark ? AppColors.darkTextTertiary : const Color(0xFF737380),
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(duration: 400.ms, delay: delayMs.ms).slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic);
-  }
-
-  Widget _buildProBanner(bool isDark) {
-    return IosBouncingButton(
-      onTap: _openGeminiLive,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF1E1E28)
-              : const Color(0xFFF7F3FF),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFFDDD6FE),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            const IosSvgIcon(
-              'lightning',
-              size: 16,
-              color: Color(0xFF7C3AED),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Unlock more features with Pro & Live Voice',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF5B21B6),
-                ),
-              ),
-            ),
-            const IosSvgIcon(
-              'arrow_right',
-              size: 14,
-              color: Color(0xFF7C3AED),
-            ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(duration: 450.ms, delay: 450.ms);
-  }
-
-  Widget _buildInputBox(bool isDark) {
+  /// Bottom Message Input Bar matching screenshot
+  Widget _buildMessageInput(bool isDark) {
     return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(26),
+        color: isDark ? AppColors.darkSurfaceElevated : Colors.white,
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-          width: 1,
+          color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+          width: 1.1,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : const Color(0xFF936DFF).withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(18, 14, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          TextField(
-            controller: _inputController,
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Ask me anything ...',
-              hintStyle: GoogleFonts.inter(
-                fontSize: 14.5,
-                color: isDark ? AppColors.darkTextTertiary : const Color(0xFFA1A1AA),
+          // Left Plus Button
+          IosBouncingButton(
+            onTap: () {
+              _openTextChat();
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF3F4F8),
+                shape: BoxShape.circle,
               ),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
+              child: Center(
+                child: Icon(
+                  Icons.add_rounded,
+                  size: 20,
+                  color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
+                ),
+              ),
             ),
-            onSubmitted: (_) => _submitInput(),
           ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Left tool shortcuts
-              Row(
-                children: [
-                  IosBouncingButton(
-                    onTap: () {},
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: IosSvgIcon(
-                        'paperclip',
-                        size: 20,
-                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IosBouncingButton(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AlertsScreen()),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: IosSvgIcon(
-                        'sliders',
-                        size: 20,
-                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
 
-              // Right Mic + Black Circular Send Button
-              Row(
-                children: [
-                  IosBouncingButton(
-                    onTap: _openGeminiLive,
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: IosSvgIcon(
-                        'mic',
-                        size: 20,
-                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IosBouncingButton(
-                    onTap: _submitInput,
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.iosBlack,
-                      ),
-                      child: const Center(
-                        child: IosSvgIcon(
-                          'send',
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+          const SizedBox(width: 8),
+
+          // Message Text Input
+          Expanded(
+            child: TextField(
+              controller: _inputController,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _submitInput(),
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
               ),
-            ],
+              decoration: InputDecoration(
+                hintText: 'Message...',
+                hintStyle: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: isDark ? AppColors.darkTextTertiary : const Color(0xFF9CA3AF),
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+
+          // Microphone Button
+          IosBouncingButton(
+            onTap: _openGeminiLive,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              child: IosSvgIcon(
+                'mic',
+                size: 20,
+                color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 4),
+
+          // Black circular send button with right arrow
+          IosBouncingButton(
+            onTap: _submitInput,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white : const Color(0xFF111114),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 18,
+                  color: isDark ? const Color(0xFF111114) : Colors.white,
+                ),
+              ),
+            ),
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 500.ms, delay: 500.ms).slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic);
+    ).animate().fadeIn(duration: 400.ms, delay: 400.ms).slideY(begin: 0.15, end: 0);
   }
 }

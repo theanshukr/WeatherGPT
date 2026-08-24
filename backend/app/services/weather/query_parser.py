@@ -57,7 +57,11 @@ class QueryUnderstandingService:
         "spraying", "insecticide", "fungicide", "urea", "fertilizer", "chhidkaw", "sinchai", "tubewell",
         "wheat", "gehu", "rice", "dhan", "mustard", "sarson", "cotton", "kapas", "sugarcane", "ganna",
         "potato", "aloo", "corn", "makka", "vegetables", "sabzi", "car", "bike", "gadi", "safar", "tour",
-        "hi", "hello", "hey", "megha", "namaste", "kaise", "ho", "haal", "kem", "cho", "pranam"
+        "hi", "hello", "hey", "megha", "namaste", "kaise", "ho", "haal", "kem", "cho", "pranam",
+        "mujhe", "mujhko", "apne", "apna", "apni", "mere", "mera", "meri", "humare", "humara", "karna", "kar",
+        "dalna", "dalne", "dal", "chahiye", "sakte", "sakta", "saktee", "h", "hai", "hain", "ghar",
+        "dawa", "dawao", "dawai", "paani", "sadak", "office", "gaanv", "gao", "gaun", "village", "batao",
+        "badal", "dhoop", "thand", "garmi", "havaye", "hawa", "toofan", "barish", "baarish"
     }
 
     CROPS_KEYWORDS = {
@@ -75,7 +79,7 @@ class QueryUnderstandingService:
         "driving": ["drive", "driving", "car", "road trip", "highway", "gadi"],
         "biking": ["bike", "biking", "two wheeler", "scooter", "motorcycle"],
         "travel": ["travel", "traveling", "travelling", "trip", "visit", "ghoomne", "safar", "flight", "train"],
-        "spraying": ["spray", "spraying", "pesticide", "insecticide", "fungicide", "chhidkaw", "urea", "fertilizer"],
+        "spraying": ["spray", "spraying", "pesticide", "insecticide", "fungicide", "chhidkaw", "urea", "fertilizer", "kitnashak", "keetnashak", "dalne"],
         "irrigation": ["irrigate", "irrigation", "watering", "pani", "sinchai", "tubewell"],
         "harvesting": ["harvest", "harvesting", "katai", "threshing", "cutting"],
         "outdoor": ["event", "match", "picnic", "cricket", "walk", "jogging", "outdoor"],
@@ -87,7 +91,7 @@ class QueryUnderstandingService:
 
         # 1. Detect Language Hint
         language_hint = "en"
-        hindi_keywords = ["kaisa", "hogi", "kya", "aaj", "kal", "baarish", "mausam", "kheti", "pani", "chhatri", "namaste", "garmi", "thandi", "safar", "ghoomne", "batao", "chhidkaw", "fasal"]
+        hindi_keywords = ["kaisa", "hogi", "kya", "aaj", "kal", "baarish", "mausam", "kheti", "pani", "chhatri", "namaste", "garmi", "thandi", "safar", "ghoomne", "batao", "chhidkaw", "fasal", "mujhe", "apne", "khet", "kitnashak", "dalne", "h"]
         has_devanagari = any('\u0900' <= char <= '\u097F' for char in msg)
         has_hindi_vocab = any(kw in msg_lower for kw in hindi_keywords)
 
@@ -123,12 +127,12 @@ class QueryUnderstandingService:
 
         # Fallback to preposition parsing if no known city matched
         if not extracted_location:
-            match_en = re.search(r'(?:to|in|for|at|around)\s+([A-Za-z]+)', msg, re.IGNORECASE)
-            match_hi = re.search(r'([A-Za-z]+)\s+(?:me|mein|mai|ka|ki|ke|jaana|ja sakte)', msg, re.IGNORECASE)
+            match_en = re.search(r'\b(?:to|in|for|at|around)\s+([A-Za-z]+)', msg, re.IGNORECASE)
+            match_hi = re.search(r'\b([A-Za-z]+)\s+(?:me|mein|mai|ka|ki|ke|jaana|ja sakte)\b', msg, re.IGNORECASE)
 
-            if match_en and match_en.group(1).lower() not in self.STOP_WORDS:
+            if match_en and len(match_en.group(1)) > 2 and match_en.group(1).lower() not in self.STOP_WORDS:
                 extracted_location = match_en.group(1).strip().capitalize()
-            elif match_hi and match_hi.group(1).lower() not in self.STOP_WORDS:
+            elif match_hi and len(match_hi.group(1)) > 2 and match_hi.group(1).lower() not in self.STOP_WORDS:
                 extracted_location = match_hi.group(1).strip().capitalize()
 
         # Multi-Turn Context Resolution: Inherit from previous turns if user says "tomorrow?", "what about there?", "rain timing?", etc.
@@ -139,9 +143,6 @@ class QueryUnderstandingService:
             any(re.search(rf'\b{re.escape(g)}\b', msg_lower) for g in ["hi", "hello", "hey", "namaste", "namaskar", "kaise ho", "kya haal", "good morning", "good evening", "good afternoon", "kem cho", "vanakkam", "pranam", "नमस्ते", "प्रणाम", "नमस्कार"]) and
             not any(w in msg_lower for w in ["rain", "baarish", "barish", "travel", "trip", "spray", "crop", "fasal", "khet", "temp", "garmi", "thandi", "toofan", "barish", "बारिश"])
         )
-
-        if not extracted_location and not is_pure_greeting:
-            extracted_location = "Delhi, India"
 
         # 3. Detect Time Range
         time_range = "current"
