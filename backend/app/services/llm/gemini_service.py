@@ -54,7 +54,7 @@ TOOL_FUNCTIONS_MAP: Dict[str, Any] = {
 class GeminiLLMService(BaseLLMService):
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
-        self.model_name = settings.GEMINI_MODEL or "gemini-2.0-flash"
+        self.model_name = settings.GEMINI_MODEL or "gemini-3.5-flash-lite"
         self.client = None
         if self.api_key:
             try:
@@ -466,7 +466,7 @@ You have direct access to authoritative meteorological tools. Whenever a user as
         # Build comprehensive advisory facts for fallback generation
         advisory_context = ""
         if farming_data:
-            advisory_context += f" Farming Advisory: {farming_data.suitability}. {farming_data.headline}. Reasons: {', '.join(farming_data.reasons)}. Recommendation: {farming_data.recommendation}."
+            advisory_context += f" Farming Advisory: {farming_data.advisory_headline}. Reasons: {', '.join(farming_data.reasons)}. Recommendation: {farming_data.recommendation}."
         elif travel_data:
             advisory_context += f" Travel Assessment: Risk Level {travel_data.travel_risk}. {travel_data.advisory_headline}. Safe Departure Windows: {', '.join(travel_data.safe_departure_windows)}."
         elif urban_data:
@@ -493,9 +493,9 @@ You have direct access to authoritative meteorological tools. Whenever a user as
         if not reply_text:
             if farming_data:
                 if parsed.language_hint in ("hi", "hinglish"):
-                    reply_text = f"{loc_name} में {farming_data.headline}। {farming_data.recommendation} (वर्तमान तापमान: {snapshot.current_temp}°C, {snapshot.current_condition})"
+                    reply_text = f"{loc_name} में {farming_data.advisory_headline}। {farming_data.recommendation} (वर्तमान तापमान: {snapshot.current_temp}°C, {snapshot.current_condition})"
                 else:
-                    reply_text = f"In {loc_name}: {farming_data.headline}. {farming_data.recommendation} (Current: {snapshot.current_temp}°C, {snapshot.current_condition})"
+                    reply_text = f"In {loc_name}: {farming_data.advisory_headline}. {farming_data.recommendation} (Current: {snapshot.current_temp}°C, {snapshot.current_condition})"
             elif parsed.language_hint in ("hi", "hinglish"):
                 reply_text = f"{loc_name} में अभी तापमान {snapshot.current_temp}°C है और मौसम {snapshot.current_condition} बना हुआ है।"
             else:

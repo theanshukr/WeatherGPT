@@ -135,11 +135,8 @@ class LLMQueryUnderstandingEngine:
 
     def __init__(self):
         self._client = None
-        raw_model = settings.GEMINI_MODEL or "gemini-2.0-flash"
-        if "3.5" in raw_model or "3.6" in raw_model or "preview" in raw_model:
-            self._model_name = "gemini-2.0-flash"
-        else:
-            self._model_name = raw_model
+        raw_model = settings.GEMINI_MODEL or "gemini-3.5-flash-lite"
+        self._model_name = raw_model
 
     def _get_client(self):
         """Lazily create the Gemini client. Reused across calls (not

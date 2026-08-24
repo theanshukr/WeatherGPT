@@ -39,19 +39,34 @@ WMO_CODE_MAP = {
 
 # In-memory TTL cache: key -> (expiry_timestamp, data)
 _memory_cache: Dict[str, Tuple[float, Any]] = {}
-_CACHE_TTL_WEATHER = 300       # 5 minutes for weather data
-_CACHE_TTL_COMPREHENSIVE = 300  # 5 minutes for comprehensive
-_CACHE_TTL_GEOCODE = 86400     # 24 hours for geocoding
-_MAX_CACHE_SIZE = 500          # Prevent unbounded memory growth
+_CACHE_TTL_WEATHER = 300        # 5 minutes for weather data (fresh)
+_CACHE_TTL_COMPREHENSIVE = 300  # 5 minutes for comprehensive (fresh)
+_CACHE_TTL_GEOCODE = 86400      # 24 hours for geocoding
+_STALE_GRACE_PERIOD = 3600      # keep stale weather data around for 1hr as emergency fallback
+_MAX_CACHE_SIZE = 500           # Prevent unbounded memory growth
 
 
 def _cache_get(key: str) -> Optional[Any]:
-    """Get value from in-memory cache if not expired."""
+    """Get value from in-memory cache if not expired (fresh only)."""
     entry = _memory_cache.get(key)
     if entry is None:
         return None
     expiry, data = entry
     if time.time() > expiry:
+        return None
+    return data
+
+
+def _cache_get_stale(key: str) -> Optional[Any]:
+    """Get value from in-memory cache even if past its normal TTL, as long as
+    it's still within the stale grace period. Used only as an emergency
+    fallback when a live fetch fails (e.g. upstream rate-limited), so we can
+    serve slightly-old data instead of erroring out to the user."""
+    entry = _memory_cache.get(key)
+    if entry is None:
+        return None
+    expiry, data = entry
+    if time.time() > expiry + _STALE_GRACE_PERIOD:
         del _memory_cache[key]
         return None
     return data
@@ -69,6 +84,7 @@ def _cache_set(key: str, data: Any, ttl: int):
 def _coord_key(lat: float, lon: float) -> str:
     """Round coordinates to 2 decimal places for cache key deduplication."""
     return f"{round(lat, 2)}:{round(lon, 2)}"
+
 
 
 class OpenMeteoService:
@@ -200,6 +216,16 @@ class OpenMeteoService:
                     return result
         except Exception as e:
             logger.error(f"Open-Meteo weather fetch error: {e}")
+
+        # Live fetch failed (e.g. rate-limited) — fall back to stale cache
+        # instead of erroring out to the user.
+        stale = _cache_get_stale(cache_key)
+        if stale:
+            logger.info(f"Serving stale weather cache for ({lat}, {lon}) after live fetch failure")
+            stale = dict(stale)
+            stale["location"] = location_name
+            stale["stale"] = True
+            return stale
         return None
 
     async def get_historical_daily(
@@ -302,6 +328,16 @@ class OpenMeteoService:
             logger.warning(f"Open-Meteo forecast timeout for ({lat}, {lon}) ({location_name})")
         except Exception as e:
             logger.warning(f"Open-Meteo forecast fetch error for ({lat}, {lon}): {type(e).__name__} - {e}")
+
+        # Live fetch failed (e.g. rate-limited) — fall back to stale cache
+        # instead of erroring out to the user.
+        stale = _cache_get_stale(mem_key)
+        if stale:
+            logger.info(f"Serving stale comprehensive-weather cache for ({lat}, {lon}) after live fetch failure")
+            stale = dict(stale)
+            stale["location_name"] = location_name
+            stale["stale"] = True
+            return stale
         return None
 
 
