@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
-import 'chat_screen.dart';
 import 'map_screen.dart';
 import 'profile_context_screen.dart';
 import '../widgets/glowing_bottom_bar.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
-  const MainNavigationScreen({super.key, this.initialIndex = 0});
+  const MainNavigationScreen({super.key, this.initialIndex = 1});
 
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
@@ -22,10 +21,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _currentIndex = widget.initialIndex;
   }
 
+  // 3-tab layout: Left = Radar, Middle = Home, Right = Profile
   final List<Widget> _screens = const [
-    HomeScreen(),
-    ChatScreen(),
     MapScreen(),
+    HomeScreen(),
     ProfileContextScreen(),
   ];
 

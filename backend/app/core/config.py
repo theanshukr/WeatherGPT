@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # LLM Configuration
     DEFAULT_LLM_PROVIDER: str = "gemini"  # gemini, sarvam
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash-lite"
     SARVAM_API_KEY: Optional[str] = None
 
     # Weather APIs

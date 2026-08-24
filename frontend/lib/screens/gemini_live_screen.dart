@@ -282,7 +282,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
                         ],
                       ),
 
-                      // Right Document Button
+                      // Right Chat Bubble Button (Transition to text chat)
                       IosBouncingButton(
                         onTap: () {
                           Navigator.pushReplacement(
@@ -302,7 +302,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
                           ),
                           child: Center(
                             child: IosSvgIcon(
-                              'document',
+                              'chat_bubble',
                               size: 18,
                               color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                             ),
@@ -359,7 +359,7 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
                     child: Text(
                       _userTranscription.isNotEmpty
                           ? _userTranscription
-                          : 'Hey, I’m trying to write something powerful for my portfolio — not too formal, but still confident. Can you help with that?',
+                          : 'Hey, what will the weather be like today? Any rainfall or storm alerts I should know about?',
                       style: GoogleFonts.inter(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w500,
@@ -370,71 +370,43 @@ class _GeminiLiveScreenState extends State<GeminiLiveScreen>
                     ),
                   ).animate().fadeIn(duration: 450.ms, delay: 200.ms).slideY(begin: 0.1, end: 0),
 
-                  // Bottom Action Controls matching Screen 2
+                  // Bottom Action Controls (Giant ripple microphone + Close button)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        // Left Camera Button
-                        IosBouncingButton(
-                          onTap: () {},
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isDark ? AppColors.darkSurface : Colors.white,
-                              border: Border.all(
-                                color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: IosSvgIcon(
-                                'camera',
-                                size: 20,
-                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-
                         // Center Giant Glowing Ripple Microphone Button
                         _buildMicCenterButton(isDark),
 
                         // Right Close Button
-                        IosBouncingButton(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isDark ? AppColors.darkSurface : Colors.white,
-                              border: Border.all(
-                                color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 2),
+                        Positioned(
+                          right: 16,
+                          child: IosBouncingButton(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark ? AppColors.darkSurface : Colors.white,
+                                border: Border.all(
+                                  color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                                 ),
-                              ],
-                            ),
-                            child: Center(
-                              child: IosSvgIcon(
-                                'close',
-                                size: 18,
-                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: IosSvgIcon(
+                                  'close',
+                                  size: 16,
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
                               ),
                             ),
                           ),

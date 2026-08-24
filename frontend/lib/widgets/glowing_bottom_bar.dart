@@ -19,11 +19,11 @@ class GlowingBottomBar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      height: 62,
+      margin: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+      height: 64,
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceElevated : Colors.white,
-        borderRadius: BorderRadius.circular(31),
+        borderRadius: BorderRadius.circular(32),
         border: Border.all(
           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
           width: 1,
@@ -31,8 +31,8 @@ class GlowingBottomBar extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.4)
-                : const Color(0xFF936DFF).withValues(alpha: 0.08),
+                ? Colors.black.withValues(alpha: 0.45)
+                : const Color(0xFF936DFF).withValues(alpha: 0.09),
             blurRadius: 28,
             offset: const Offset(0, 8),
           ),
@@ -44,38 +44,35 @@ class GlowingBottomBar extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            // Left: Radar
             _buildNavItem(
               index: 0,
-              icon: 'surprise',
-              label: 'Explore',
-              isDark: isDark,
-            ),
-            _buildNavItem(
-              index: 1,
-              icon: 'chat_bubble',
-              label: 'Chat',
-              isDark: isDark,
-            ),
-            _buildNavItem(
-              index: 2,
               icon: 'radar',
               label: 'Radar',
               isDark: isDark,
             ),
+            // Middle: Home / Assistant
             _buildNavItem(
-              index: 3,
+              index: 1,
+              icon: 'sparkles',
+              label: 'Home',
+              isDark: isDark,
+            ),
+            // Right: Profile
+            _buildNavItem(
+              index: 2,
               icon: 'user',
-              label: 'Context',
+              label: 'Profile',
               isDark: isDark,
             ),
           ],
         ),
       ),
-    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.3, end: 0, curve: Curves.easeOutCubic);
+    ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.25, end: 0, curve: Curves.easeOutCubic);
   }
 
   Widget _buildNavItem({
@@ -85,7 +82,7 @@ class GlowingBottomBar extends StatelessWidget {
     required bool isDark,
   }) {
     final isSelected = selectedIndex == index;
-    final inactiveColor = isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary;
+    final inactiveColor = isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A);
 
     return IosBouncingButton(
       onTap: () => onItemSelected(index),
@@ -93,8 +90,8 @@ class GlowingBottomBar extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
-          vertical: 8,
+          horizontal: isSelected ? 18 : 14,
+          vertical: 9,
         ),
         decoration: BoxDecoration(
           color: isSelected
@@ -102,7 +99,7 @@ class GlowingBottomBar extends StatelessWidget {
                   ? Colors.white.withValues(alpha: 0.12)
                   : const Color(0xFFF3EDFD))
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -113,12 +110,12 @@ class GlowingBottomBar extends StatelessWidget {
               color: isSelected ? (isDark ? Colors.white : const Color(0xFF7C3AED)) : inactiveColor,
             ),
             if (isSelected) ...[
-              const SizedBox(width: 7),
+              const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
                   color: isDark ? Colors.white : const Color(0xFF7C3AED),
                   letterSpacing: -0.2,
                 ),

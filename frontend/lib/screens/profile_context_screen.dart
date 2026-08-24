@@ -67,33 +67,36 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar
+            // Top Bar (Responsive without overflow)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      if (widget.isStandalone)
-                        IconButton(
-                          icon: Icon(
-                            Icons.chevron_left_rounded,
-                            size: 28,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      const GeminiSparkleIcon(size: 24),
-                      const SizedBox(width: 10),
-                      Text(
-                        'AI Intelligence & Memory',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
+                  if (widget.isStandalone) ...[
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(
+                        Icons.chevron_left_rounded,
+                        size: 28,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                       ),
-                    ],
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  const GeminiSparkleIcon(size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'AI Intelligence',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -423,9 +426,12 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               ?trailing,
             ],

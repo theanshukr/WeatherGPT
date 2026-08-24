@@ -36,7 +36,7 @@ class _SplashScreenState extends State<SplashScreen> {
         pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
         transitionsBuilder: (context, animation, secondaryAnimation, child) =>
             FadeTransition(opacity: animation, child: child),
-        transitionDuration: const Duration(milliseconds: 500),
+        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }
@@ -47,102 +47,111 @@ class _SplashScreenState extends State<SplashScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      body: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Ethereal Lavender Glow
-          Positioned(
-            top: MediaQuery.of(context).size.height * 0.25,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    isDark
-                        ? const Color(0xFF7C3AED).withValues(alpha: 0.2)
-                        : const Color(0xFFE0D4F7).withValues(alpha: 0.8),
-                    Colors.transparent,
+      body: SizedBox.expand(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Ethereal Lavender Ambient Center Glow
+            Positioned(
+              top: MediaQuery.of(context).size.height * 0.25,
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      isDark
+                          ? const Color(0xFF7C3AED).withValues(alpha: 0.22)
+                          : const Color(0xFFE0D4F7).withValues(alpha: 0.85),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Full Height Centered Content
+            Positioned.fill(
+              child: SafeArea(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Spacer(flex: 3),
+
+                    // Radiant 3D Glowing Orb Icon
+                    Container(
+                      width: 82,
+                      height: 82,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF7C3AED), Color(0xFFEC4899), Color(0xFF38BDF8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                            blurRadius: 30,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: IosSvgIcon(
+                          'sparkles',
+                          size: 38,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ).animate().scale(duration: 650.ms, curve: Curves.easeOutBack),
+
+                    const SizedBox(height: 24),
+
+                    Text(
+                      'WeatherGPT',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
+                        letterSpacing: -0.8,
+                      ),
+                    ).animate().fadeIn(duration: 400.ms, delay: 180.ms),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      'AI Weather & Early Warning Intelligence',
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
+                      ),
+                    ).animate().fadeIn(duration: 400.ms, delay: 240.ms),
+
+                    const Spacer(flex: 3),
+
+                    // Bottom Loading Spinner
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        valueColor: AlwaysStoppedAnimation(
+                          isDark ? const Color(0xFFC4B5FD) : const Color(0xFF7C3AED),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 36),
                   ],
                 ),
               ),
             ),
-          ),
-
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 3),
-
-              // Radiant 3D Glowing Orb Icon
-              Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7C3AED), Color(0xFFEC4899), Color(0xFF38BDF8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
-                      blurRadius: 28,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: IosSvgIcon(
-                    'sparkles',
-                    size: 36,
-                    color: Colors.white,
-                  ),
-                ),
-              ).animate().scale(duration: 700.ms, curve: Curves.easeOutBack),
-
-              const SizedBox(height: 24),
-
-              Text(
-                'WeatherGPT',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
-                  letterSpacing: -0.6,
-                ),
-              ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
-
-              const SizedBox(height: 6),
-
-              Text(
-                'AI Weather & Early Warning Intelligence',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A),
-                ),
-              ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
-
-              const Spacer(flex: 3),
-
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(
-                    isDark ? const Color(0xFFC4B5FD) : AppColors.iosBlack,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 48),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

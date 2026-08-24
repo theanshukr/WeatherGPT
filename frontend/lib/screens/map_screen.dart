@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:latlong2/latlong.dart';
 import '../core/theme/app_colors.dart';
 import '../models/alert_model.dart';
 import '../services/alert_service.dart';
 import '../services/location_service.dart';
-import '../widgets/gemini_sparkle_icon.dart';
+import '../widgets/ios_svg_icon.dart';
+import '../widgets/ios_bouncing_button.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -24,7 +26,8 @@ class _MapScreenState extends State<MapScreen> {
   List<WeatherAlert> _alerts = [];
   WeatherAlert? _selectedAlert;
   bool _isLoading = true;
-  String _selectedLayer = 'Alerts & Radar';
+  String _selectedLayer = 'Radar';
+  bool _showLegend = true;
 
   @override
   void initState() {
@@ -59,7 +62,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _recenter() {
-    _mapController.move(_userLocation, 10.0);
+    _mapController.move(_userLocation, 9.0);
+  }
+
+  void _zoomIn() {
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(_mapController.camera.center, (currentZoom + 1).clamp(3.0, 18.0));
+  }
+
+  void _zoomOut() {
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(_mapController.camera.center, (currentZoom - 1).clamp(3.0, 18.0));
   }
 
   @override
@@ -75,29 +88,29 @@ class _MapScreenState extends State<MapScreen> {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _userLocation,
-              initialZoom: 7.0,
+              initialZoom: 8.0,
               minZoom: 3.0,
               maxZoom: 18.0,
             ),
             children: [
-              // Basemap: Dark CartoDB / Light CartoDB
+              // High-resolution Basemap (CartoDB Dark / Light Voyager)
               TileLayer(
                 urlTemplate: isDark
                     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.weathergpt.app',
               ),
 
-              // Weather Radar / Precipitation Tile Layer overlay when selected
-              if (_selectedLayer == 'Precipitation' || _selectedLayer == 'Alerts & Radar')
+              // Weather Radar / Precipitation Tile Layer
+              if (_selectedLayer == 'Radar' || _selectedLayer == 'Precipitation')
                 TileLayer(
-                  urlTemplate: 'https://tile.rainviewer.com/v2/radar/nowcast_latest/256/{z}/{x}/{y}/2/1_1.png',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.weathergpt.app',
                   tileProvider: NetworkTileProvider(),
                 ),
 
-              // Severe Weather Alert Circles / Radiation Area
+              // Severe Weather Alert Circles
               CircleLayer(
                 circles: _alerts.where((a) => a.latitude != 0.0 && a.longitude != 0.0).map((alert) {
                   final isEmergency = alert.severity == AlertSeverity.emergency;
@@ -105,12 +118,12 @@ class _MapScreenState extends State<MapScreen> {
                       ? AppColors.alertCrimson
                       : (alert.severity == AlertSeverity.warning
                           ? AppColors.sunnyGold
-                          : AppColors.geminiCyan);
+                          : const Color(0xFF7C3AED));
                   return CircleMarker(
                     point: LatLng(alert.latitude, alert.longitude),
-                    radius: isEmergency ? 45000 : 30000,
+                    radius: isEmergency ? 45000 : 25000,
                     useRadiusInMeter: true,
-                    color: color.withValues(alpha: 0.15),
+                    color: color.withValues(alpha: 0.16),
                     borderColor: color.withValues(alpha: 0.8),
                     borderStrokeWidth: 2,
                   );
@@ -120,42 +133,34 @@ class _MapScreenState extends State<MapScreen> {
               // Markers Layer
               MarkerLayer(
                 markers: [
-                  // User Location Pin
+                  // User Live Location Pin
                   Marker(
                     point: _userLocation,
-                    width: 60,
-                    height: 60,
-                    child: GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('📍 Location (${_userLocation.latitude.toStringAsFixed(2)}, ${_userLocation.longitude.toStringAsFixed(2)})'),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                    width: 50,
+                    height: 50,
+                    child: Center(
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
                           Container(
-                            width: 32,
-                            height: 32,
+                            width: 38,
+                            height: 38,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.geminiBlue.withValues(alpha: 0.25),
+                              color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
                             ),
                           ),
                           Container(
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.geminiBlue,
+                              color: const Color(0xFF7C3AED),
                               border: Border.all(color: Colors.white, width: 2.5),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.geminiBlue.withValues(alpha: 0.8),
-                                  blurRadius: 10,
+                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.6),
+                                  blurRadius: 8,
                                 ),
                               ],
                             ),
@@ -172,42 +177,36 @@ class _MapScreenState extends State<MapScreen> {
                         ? AppColors.alertCrimson
                         : (alert.severity == AlertSeverity.warning
                             ? AppColors.sunnyGold
-                            : AppColors.geminiCyan);
+                            : const Color(0xFF7C3AED));
 
                     return Marker(
                       point: LatLng(alert.latitude, alert.longitude),
-                      width: 48,
-                      height: 48,
-                      child: GestureDetector(
+                      width: 44,
+                      height: 44,
+                      child: IosBouncingButton(
                         onTap: () {
-                          setState(() {
-                            _selectedAlert = alert;
-                          });
-                          _mapController.move(
-                            LatLng(alert.latitude, alert.longitude),
-                            9.0,
-                          );
+                          setState(() => _selectedAlert = alert);
+                          _mapController.move(LatLng(alert.latitude, alert.longitude), 9.5);
                         },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
+                        child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isDark ? AppColors.darkSurfaceElevated : Colors.white,
+                            color: isDark ? AppColors.darkSurface : Colors.white,
                             border: Border.all(color: markerColor, width: 2),
                             boxShadow: [
                               BoxShadow(
-                                color: markerColor.withValues(alpha: 0.4),
-                                blurRadius: 12,
+                                color: markerColor.withValues(alpha: 0.35),
+                                blurRadius: 10,
                                 spreadRadius: 1,
                               ),
                             ],
                           ),
-                          child: Icon(
-                            isEmergency
-                                ? Icons.warning_amber_rounded
-                                : Icons.thunderstorm_outlined,
-                            color: markerColor,
-                            size: 24,
+                          child: Center(
+                            child: IosSvgIcon(
+                              isEmergency ? 'bell' : 'cloud_rain',
+                              size: 18,
+                              color: markerColor,
+                            ),
                           ),
                         ),
                       ),
@@ -226,82 +225,95 @@ class _MapScreenState extends State<MapScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // Back Button
-                  GestureDetector(
+                  IosBouncingButton(
                     onTap: () => Navigator.pop(context),
                     child: Container(
-                      padding: const EdgeInsets.all(10),
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.90)
-                            : AppColors.lightSurface.withValues(alpha: 0.95),
-                        shape: BoxShape.circle,
+                        color: isDark ? AppColors.darkSurface : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                         ),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
                         ],
                       ),
-                      child: Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                        size: 18,
+                      child: Center(
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          size: 16,
+                        ),
                       ),
                     ),
                   ),
 
-                  // Map Title Pill (Gemini Sparkle + GIS Radar)
+                  // Title Pill
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkSurfaceElevated.withValues(alpha: 0.90)
-                          : AppColors.lightSurface.withValues(alpha: 0.95),
+                      color: isDark ? AppColors.darkSurface : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                       ),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
                       ],
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const GeminiSparkleIcon(size: 18),
+                        const IosSvgIcon('radar', size: 16, color: Color(0xFF7C3AED)),
                         const SizedBox(width: 8),
                         Text(
-                          'GIS Radar & Telemetry',
+                          'Live GIS Radar & Satellite',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.iosBlack,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // Recenter Action
-                  GestureDetector(
+                  // Recenter GPS Action
+                  IosBouncingButton(
                     onTap: _recenter,
                     child: Container(
-                      padding: const EdgeInsets.all(10),
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.90)
-                            : AppColors.lightSurface.withValues(alpha: 0.95),
-                        shape: BoxShape.circle,
+                        color: isDark ? AppColors.darkSurface : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                         ),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.my_location_rounded,
-                        color: AppColors.geminiCyan,
-                        size: 20,
+                      child: const Center(
+                        child: Icon(
+                          Icons.my_location_rounded,
+                          color: Color(0xFF7C3AED),
+                          size: 18,
+                        ),
                       ),
                     ),
                   ),
@@ -310,187 +322,253 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // 3. Layer Chips (Top Sub-bar)
+          // 3. Right Map Floating Zoom Controls
           Positioned(
-            top: 74,
-            left: 16,
             right: 16,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildLayerChip('Alerts & Radar', Icons.radar_rounded, isDark),
-                  const SizedBox(width: 8),
-                  _buildLayerChip('Precipitation', Icons.water_drop_rounded, isDark),
-                  const SizedBox(width: 8),
-                  _buildLayerChip('Heat Stress', Icons.thermostat_rounded, isDark),
-                  const SizedBox(width: 8),
-                  _buildLayerChip('Wind Speeds', Icons.air_rounded, isDark),
-                ],
-              ),
+            top: 130,
+            child: Column(
+              children: [
+                IosBouncingButton(
+                  onTap: _zoomIn,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.add_rounded,
+                      size: 20,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ),
+                IosBouncingButton(
+                  onTap: _zoomOut,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.remove_rounded,
+                      size: 20,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                IosBouncingButton(
+                  onTap: () => setState(() => _showLegend = !_showLegend),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _showLegend
+                          ? const Color(0xFF7C3AED)
+                          : (isDark ? AppColors.darkSurface : Colors.white),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.layers_rounded,
+                        size: 18,
+                        color: _showLegend
+                            ? Colors.white
+                            : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
-          // 4. Selected Alert Detail Bottom Card
-          if (_selectedAlert != null)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 24,
-              child: Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: _selectedAlert!.severity == AlertSeverity.emergency
-                        ? AppColors.alertCrimson.withValues(alpha: 0.5)
-                        : AppColors.geminiBlue.withValues(alpha: 0.35),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _selectedAlert!.severity == AlertSeverity.emergency
-                                ? AppColors.alertCrimson.withValues(alpha: 0.15)
-                                : AppColors.sunnyGold.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            _selectedAlert!.severity == AlertSeverity.emergency
-                                ? '🚨 SEVERE EMERGENCY'
-                                : '⚠️ ADVISORY WARNING',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: _selectedAlert!.severity == AlertSeverity.emergency
-                                  ? AppColors.alertCrimson
-                                  : AppColors.sunnyGold,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 20),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () => setState(() => _selectedAlert = null),
+          // 4. Expanded Floating Radar Options & Layer Dock (Bottom)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Selected Alert Detail Card (if open)
+                if (_selectedAlert != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _selectedAlert!.title,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (_selectedAlert!.description.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        _selectedAlert!.description,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                    if (_selectedAlert!.instructions.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Icon(Icons.shield_outlined, size: 16, color: AppColors.geminiCyan),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _selectedAlert!.instructions,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            Text(
+                              _selectedAlert!.title,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
                               ),
+                            ),
+                            IosBouncingButton(
+                              onTap: () => setState(() => _selectedAlert = null),
+                              child: const IosSvgIcon('close', size: 16),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _selectedAlert!.description,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.1, end: 0),
+                ],
+
+                // Radar Legend Bar (when toggled on)
+                if (_showLegend) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Rain Intensity (mm/h):', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600)),
+                        Row(
+                          children: [
+                            _buildLegendPill('Light', const Color(0xFF60A5FA)),
+                            const SizedBox(width: 4),
+                            _buildLegendPill('Moderate', const Color(0xFF34D399)),
+                            const SizedBox(width: 4),
+                            _buildLegendPill('Heavy', const Color(0xFFFBBF24)),
+                            const SizedBox(width: 4),
+                            _buildLegendPill('Extreme', const Color(0xFFEF4444)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 200.ms),
+                ],
+
+                // Expanded Layer Selector Dock
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkSurface : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
                       ),
                     ],
-                  ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildLayerButton('Radar', 'radar', isDark),
+                      _buildLayerButton('Precipitation', 'cloud_rain', isDark),
+                      _buildLayerButton('Storm Alerts', 'bell', isDark),
+                      _buildLayerButton('Temperature', 'sun', isDark),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
+          ),
 
           if (_isLoading)
             const Center(
-              child: CircularProgressIndicator(color: AppColors.geminiBlue),
+              child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildLayerChip(String label, IconData icon, bool isDark) {
+  Widget _buildLegendPill(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 2),
+        Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
+  Widget _buildLayerButton(String label, String iconName, bool isDark) {
     final isSelected = _selectedLayer == label;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedLayer = label;
-        });
-      },
+    return IosBouncingButton(
+      onTap: () => setState(() => _selectedLayer = label),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.geminiBlue
-              : (isDark
-                  ? AppColors.darkSurfaceElevated.withValues(alpha: 0.85)
-                  : AppColors.lightSurface.withValues(alpha: 0.9)),
+              ? (isDark ? Colors.white.withValues(alpha: 0.12) : const Color(0xFFF3EDFD))
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.geminiBlue
-                : (isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder),
-          ),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-          ],
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isSelected
-                  ? Colors.white
-                  : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+            IosSvgIcon(
+              iconName,
+              size: 16,
+              color: isSelected ? const Color(0xFF7C3AED) : (isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A)),
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected
-                    ? Colors.white
-                    : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? const Color(0xFF7C3AED) : (isDark ? AppColors.darkTextTertiary : const Color(0xFF71717A)),
               ),
             ),
           ],

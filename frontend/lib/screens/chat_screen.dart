@@ -11,6 +11,7 @@ import '../widgets/chat_message_view.dart';
 import '../widgets/ios_svg_icon.dart';
 import '../widgets/ios_bouncing_button.dart';
 import 'gemini_live_screen.dart';
+import 'settings_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? initialQuery;
@@ -121,7 +122,13 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.only(left: 14),
           child: Center(
             child: IosBouncingButton(
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                } else {
+                  _showChatOptionsSheet(context, isDark);
+                }
+              },
               child: Container(
                 width: 38,
                 height: 38,
@@ -133,11 +140,17 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 child: Center(
-                  child: IosSvgIcon(
-                    'menu',
-                    size: 16,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                  ),
+                  child: Navigator.canPop(context)
+                      ? Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 16,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        )
+                      : IosSvgIcon(
+                          'menu',
+                          size: 16,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        ),
                 ),
               ),
             ),
@@ -168,11 +181,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                     ),
                   ),
-                  child: Center(
+                  child: const Center(
                     child: IosSvgIcon(
-                      'document',
-                      size: 16,
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      'sparkles',
+                      size: 18,
+                      color: Color(0xFF7C3AED),
                     ),
                   ),
                 ),
@@ -423,27 +436,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         child: Row(
           children: [
-            // Left Plus button
-            IosBouncingButton(
-              onTap: () {},
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF282832) : const Color(0xFFF3F0FA),
-                ),
-                child: Center(
-                  child: IosSvgIcon(
-                    'plus',
-                    size: 16,
-                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 10),
+            const SizedBox(width: 4),
 
             // Text Input Field
             Expanded(
@@ -504,6 +497,71 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showChatOptionsSheet(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 28,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const IosSvgIcon('refresh', size: 20, color: Color(0xFF7C3AED)),
+                title: Text('New Conversation', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.read<ChatProvider>().clearConversation();
+                },
+              ),
+              ListTile(
+                leading: const IosSvgIcon('mic', size: 20, color: Color(0xFFEC4899)),
+                title: Text('Live Voice Mode', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openGeminiLive();
+                },
+              ),
+              ListTile(
+                leading: const IosSvgIcon('sliders', size: 20, color: Color(0xFF38BDF8)),
+                title: Text('Settings & Intelligence', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
