@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.redis import redis_manager
 from app.api.v1.api import api_router
-from app.api.v1.endpoints.ws import manager as ws_manager
+from app.api.v1.endpoints.voice_websocket import manager as ws_manager
 from app.services.alerts.alert_poller import alert_poller
 
 # Configure logging

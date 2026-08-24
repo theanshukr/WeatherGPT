@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme/app_colors.dart';
-import '../widgets/svg_icon.dart';
 import '../services/supabase_service.dart';
 import 'onboarding_screen.dart';
 import 'main_navigation_screen.dart';

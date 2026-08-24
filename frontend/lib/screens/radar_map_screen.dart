@@ -59,9 +59,25 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
     super.dispose();
   }
 
-  /// 1. Instant Hardware GPS (0ms UI freeze, no waiting for backend)
+  /// 1. Instant Hardware GPS → IP Fallback → Full Resolution
   Future<void> _initInstantLocationAndData() async {
     try {
+      // Attempt cached location first for absolute instant snap
+      final cachedLoc = LocationService.currentCachedLocation;
+      if (cachedLoc != null && mounted) {
+        final cachedLatLng = LatLng(cachedLoc.latitude, cachedLoc.longitude);
+        setState(() {
+          _userLocation = cachedLatLng;
+          _currentCityName = cachedLoc.name;
+          _isLoadingGps = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          try { _mapController.move(cachedLatLng, 14.0); } catch (_) {}
+        });
+        _fetchPrecisionMeteorology(cachedLatLng.latitude, cachedLatLng.longitude);
+      }
+
+      // Hardware GPS resolution
       final rawPosition = await _locationService.getRawDevicePosition();
       if (rawPosition != null && mounted) {
         final fastLatLng = LatLng(rawPosition.latitude, rawPosition.longitude);
@@ -72,23 +88,30 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
 
         // Snap map camera immediately to exact user position (Google Maps style)
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          try {
-            _mapController.move(fastLatLng, 14.0);
-          } catch (_) {}
+          try { _mapController.move(fastLatLng, 14.0); } catch (_) {}
         });
 
-        // Fetch precision meteorological data & reverse geocode asynchronously
+        // Fetch precision meteorological data asynchronously
         _fetchPrecisionMeteorology(fastLatLng.latitude, fastLatLng.longitude);
       }
 
       // Detailed location resolution & alerts in background
       final detailedLoc = await _locationService.getCurrentLocation();
       if (mounted) {
+        final detailedLatLng = LatLng(detailedLoc.latitude, detailedLoc.longitude);
         setState(() {
-          _userLocation = LatLng(detailedLoc.latitude, detailedLoc.longitude);
+          _userLocation = detailedLatLng;
           _currentCityName = detailedLoc.name;
           _isLoadingGps = false;
         });
+
+        // Move map if GPS was null earlier (IP fallback resolved)
+        if (rawPosition == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            try { _mapController.move(detailedLatLng, 14.0); } catch (_) {}
+          });
+          _fetchPrecisionMeteorology(detailedLatLng.latitude, detailedLatLng.longitude);
+        }
 
         _loadAlerts(detailedLoc.latitude, detailedLoc.longitude, detailedLoc.name);
       }

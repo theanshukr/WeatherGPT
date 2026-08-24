@@ -13,28 +13,60 @@ class LocationService {
   static WeatherLocation? get currentCachedLocation => _cachedLocation;
 
   /// Instant hardware GPS position query (zero network blocking)
+  /// Uses tiered fallback: cached → low-accuracy (fast) → high-accuracy
   Future<Position?> getRawDevicePosition() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       LocationPermission permission = await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
 
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('Location permission permanently denied');
+        return null;
+      }
+
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         // 1. Try last known position for instant 0ms response
-        Position? position = await Geolocator.getLastKnownPosition();
-        if (position != null) return position;
+        Position? lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          debugPrint('GPS: instant cached position (${lastKnown.latitude}, ${lastKnown.longitude})');
+          return lastKnown;
+        }
 
-        // 2. Fetch fresh high-accuracy position
-        if (serviceEnabled) {
-          return await Geolocator.getCurrentPosition(
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          debugPrint('GPS: Location services disabled');
+          return null;
+        }
+
+        // 2. Quick low-accuracy fix first (1-2 seconds, uses cell towers / WiFi)
+        try {
+          final quickPos = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              timeLimit: Duration(seconds: 4),
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 3),
             ),
           );
+          debugPrint('GPS: quick low-accuracy fix (${quickPos.latitude}, ${quickPos.longitude})');
+          return quickPos;
+        } catch (e) {
+          debugPrint('GPS: low-accuracy timeout, trying high-accuracy...');
+        }
+
+        // 3. Full high-accuracy GPS fix (takes longer but most precise)
+        try {
+          final precisePos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 8),
+            ),
+          );
+          debugPrint('GPS: high-accuracy fix (${precisePos.latitude}, ${precisePos.longitude})');
+          return precisePos;
+        } catch (e) {
+          debugPrint('GPS: high-accuracy also timed out: $e');
         }
       }
     } catch (e) {
