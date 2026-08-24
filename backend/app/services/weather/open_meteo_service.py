@@ -201,10 +201,17 @@ class OpenMeteoService:
         }
 
     async def _fetch_with_retry(self, client: httpx.AsyncClient, url: str, params: dict, max_retries: int = 2) -> Optional[httpx.Response]:
-        """Fetch URL with exponential backoff on 429 responses."""
+        """Fetch URL with exponential backoff on 429 responses and optional API key support."""
+        call_params = dict(params)
+        call_url = url
+        if settings.OPEN_METEO_API_KEY:
+            call_params["apikey"] = settings.OPEN_METEO_API_KEY
+            if "api.open-meteo.com" in call_url:
+                call_url = call_url.replace("api.open-meteo.com", "customer-api.open-meteo.com")
+
         for attempt in range(max_retries + 1):
             try:
-                resp = await client.get(url, params=params)
+                resp = await client.get(call_url, params=call_params)
                 if resp.status_code == 200:
                     return resp
                 if resp.status_code == 429:
