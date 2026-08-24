@@ -164,6 +164,30 @@ class SarvamVoiceService:
             logger.error(f"Error merging WAV audio chunks: {e}")
             return base64_list[0] if base64_list else None
 
+    async def transliterate_to_indic(self, text: str, target_language_code: str = "hi-IN") -> str:
+        """Converts Latin-script Hinglish text into native Indic script for crystal clear natural TTS pronunciation."""
+        if not self.api_key or not text:
+            return text
+        try:
+            headers = {"api-subscription-key": self.api_key}
+            payload = {
+                "input": text,
+                "source_language_code": "en-IN",
+                "target_language_code": target_language_code,
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/transliterate",
+                    headers=headers,
+                    json=payload,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("transliterated_text", text)
+        except Exception as e:
+            logger.warning(f"Sarvam transliteration error: {e}")
+        return text
+
     async def text_to_speech(
         self,
         text: str,
@@ -197,6 +221,12 @@ class SarvamVoiceService:
 
         # Clean speech text: completely remove asterisks, emojis, and markdown
         clean_text = self.clean_text_for_speech(text, target_language_code)
+
+        # If target language is Hindi/Indic and text contains Latin/English letters (e.g. Hinglish),
+        # automatically transliterate it to Devanagari so Sarvam Bulbul speaks with 100% natural, sweet pronunciation!
+        import re
+        if (target_language_code.startswith("hi") or target_language_code in ("hi-IN", "mr-IN", "gu-IN", "bn-IN", "pa-IN")) and bool(re.search(r'[a-zA-Z]{3,}', clean_text)):
+            clean_text = await self.transliterate_to_indic(clean_text, target_language_code)
 
         # Split into natural sentence chunks under 500 chars to avoid truncation
         import re
