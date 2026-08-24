@@ -54,7 +54,7 @@ TOOL_FUNCTIONS_MAP: Dict[str, Any] = {
 class GeminiLLMService(BaseLLMService):
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
-        self.model_name = settings.GEMINI_MODEL or "gemini-2.0-flash-lite"
+        self.model_name = settings.GEMINI_MODEL or "gemini-3.5-flash-lite"
         self.client = None
         if self.api_key:
             try:
