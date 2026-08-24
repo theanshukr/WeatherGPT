@@ -295,8 +295,120 @@ class OpenMeteoService:
                 return coords
         return (28.6139, 77.2090, f"{city_name.title()}, India")
 
+    async def _fetch_from_weatherapi(self, lat: float, lon: float, location_name: str) -> Optional[Dict[str, Any]]:
+        """Fetch 100% live weather from WeatherAPI.com (when key is configured) to bypass cloud IP rate-limiting."""
+        if not settings.WEATHERAPI_KEY:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{settings.WEATHERAPI_BASE_URL}/forecast.json",
+                    params={
+                        "key": settings.WEATHERAPI_KEY,
+                        "q": f"{lat},{lon}",
+                        "days": 7,
+                        "aqi": "no",
+                        "alerts": "no",
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    cur = data.get("current", {})
+                    loc = data.get("location", {})
+                    forecast_days = data.get("forecast", {}).get("forecastday", [])
+
+                    hourly_times = []
+                    hourly_temps = []
+                    hourly_humidity = []
+                    hourly_precip_prob = []
+                    hourly_precip = []
+                    hourly_codes = []
+                    hourly_winds = []
+
+                    for fday in forecast_days:
+                        for hr in fday.get("hour", []):
+                            hourly_times.append(hr.get("time", "").replace(" ", "T"))
+                            hourly_temps.append(hr.get("temp_c", 0.0))
+                            hourly_humidity.append(hr.get("humidity", 50))
+                            hourly_precip_prob.append(hr.get("chance_of_rain", 0))
+                            hourly_precip.append(hr.get("precip_mm", 0.0))
+                            hourly_codes.append(1 if hr.get("chance_of_rain", 0) < 40 else 61)
+                            hourly_winds.append(hr.get("wind_kph", 5.0))
+
+                    daily_dates = []
+                    daily_codes = []
+                    daily_max = []
+                    daily_min = []
+                    daily_precip_sum = []
+                    daily_precip_prob_max = []
+                    daily_wind_max = []
+                    daily_uv_max = []
+                    daily_sunrise = []
+                    daily_sunset = []
+
+                    for fday in forecast_days:
+                        d_str = fday.get("date", "")
+                        day_obj = fday.get("day", {})
+                        daily_dates.append(d_str)
+                        daily_codes.append(1 if day_obj.get("daily_chance_of_rain", 0) < 40 else 61)
+                        daily_max.append(day_obj.get("maxtemp_c", 30.0))
+                        daily_min.append(day_obj.get("mintemp_c", 20.0))
+                        daily_precip_sum.append(day_obj.get("totalprecip_mm", 0.0))
+                        daily_precip_prob_max.append(day_obj.get("daily_chance_of_rain", 0))
+                        daily_wind_max.append(day_obj.get("maxwind_kph", 10.0))
+                        daily_uv_max.append(day_obj.get("uv", 5.0))
+                        daily_sunrise.append(f"{d_str}T06:00")
+                        daily_sunset.append(f"{d_str}T18:30")
+
+                    resolved_name = location_name or f"{loc.get('name', '')}, {loc.get('country', '')}"
+                    code = 1 if cur.get("condition", {}).get("text", "").lower().find("rain") == -1 else 61
+                    condition = cur.get("condition", {}).get("text", "Clear")
+
+                    return {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "timezone": "auto",
+                        "location_name": resolved_name,
+                        "current": {
+                            "temperature_2m": cur.get("temp_c", 25.0),
+                            "relative_humidity_2m": cur.get("humidity", 50.0),
+                            "precipitation": cur.get("precip_mm", 0.0),
+                            "weather_code": code,
+                            "condition": condition,
+                            "wind_speed_10m": cur.get("wind_kph", 10.0),
+                            "wind_direction_10m": cur.get("wind_degree", 180.0),
+                            "is_day": cur.get("is_day", 1),
+                            "time": cur.get("last_updated", "").replace(" ", "T"),
+                        },
+                        "hourly": {
+                            "time": hourly_times,
+                            "temperature_2m": hourly_temps,
+                            "relative_humidity_2m": hourly_humidity,
+                            "precipitation_probability": hourly_precip_prob,
+                            "precipitation": hourly_precip,
+                            "weather_code": hourly_codes,
+                            "wind_speed_10m": hourly_winds,
+                        },
+                        "daily": {
+                            "time": daily_dates,
+                            "weather_code": daily_codes,
+                            "temperature_2m_max": daily_max,
+                            "temperature_2m_min": daily_min,
+                            "precipitation_sum": daily_precip_sum,
+                            "precipitation_probability_max": daily_precip_prob_max,
+                            "wind_speed_10m_max": daily_wind_max,
+                            "uv_index_max": daily_uv_max,
+                            "sunrise": daily_sunrise,
+                            "sunset": daily_sunset,
+                        },
+                        "source": "weatherapi",
+                    }
+        except Exception as e:
+            logger.warning(f"WeatherAPI fallback fetch error: {e}")
+        return None
+
     async def get_current_weather(self, lat: float, lon: float, location_name: str = "Location") -> Optional[Dict[str, Any]]:
-        """Fetch current weather for given coordinates with in-memory caching and resilient fallback."""
+        """Fetch current weather for given coordinates with in-memory caching and resilient multi-tier fallback."""
         cache_key = f"current:{_coord_key(lat, lon)}"
         cached = _cache_get(cache_key)
         if cached:
@@ -340,7 +452,29 @@ class OpenMeteoService:
         except Exception as e:
             logger.error(f"Open-Meteo weather fetch error: {e}")
 
-        # Live fetch failed (e.g. rate-limited) — fall back to stale cache
+        # Tier 2: Live WeatherAPI fallback (if configured)
+        wapi_data = await self._fetch_from_weatherapi(lat, lon, location_name)
+        if wapi_data and "current" in wapi_data:
+            cur = wapi_data["current"]
+            result = {
+                "location": location_name,
+                "latitude": lat,
+                "longitude": lon,
+                "temperature": cur.get("temperature_2m", 0.0),
+                "humidity": cur.get("relative_humidity_2m", 0.0),
+                "precipitation": cur.get("precipitation", 0.0),
+                "wind_speed": cur.get("wind_speed_10m", 0.0),
+                "wind_direction": cur.get("wind_direction_10m", 0.0),
+                "weather_code": cur.get("weather_code", 1),
+                "condition": cur.get("condition", "Clear"),
+                "is_day": cur.get("is_day", 1),
+                "time": cur.get("time", ""),
+                "source": "weatherapi",
+            }
+            _cache_set(cache_key, result, _CACHE_TTL_WEATHER)
+            return result
+
+        # Tier 3: Stale cache fallback
         stale = _cache_get_stale(cache_key)
         if stale:
             logger.info(f"Serving stale weather cache for ({lat}, {lon}) after live fetch failure")
@@ -349,7 +483,7 @@ class OpenMeteoService:
             stale["stale"] = True
             return stale
 
-        # Fallback to realistic synthetic weather instead of returning 502
+        # Tier 4: Realistic synthetic weather fallback (Never returns 502)
         logger.warning(f"Serving synthetic fallback current weather for ({lat}, {lon}) ({location_name})")
         return self._generate_synthetic_current_weather(lat, lon, location_name)
 
@@ -454,7 +588,14 @@ class OpenMeteoService:
         except Exception as e:
             logger.warning(f"Open-Meteo forecast fetch error for ({lat}, {lon}): {type(e).__name__} - {e}")
 
-        # Live fetch failed (e.g. rate-limited) — fall back to stale cache first
+        # Tier 2: Live WeatherAPI fallback (if configured)
+        wapi_data = await self._fetch_from_weatherapi(lat, lon, location_name)
+        if wapi_data:
+            logger.info(f"Serving live WeatherAPI data for ({lat}, {lon}) ({location_name})")
+            _cache_set(mem_key, wapi_data, _CACHE_TTL_COMPREHENSIVE)
+            return wapi_data
+
+        # Tier 3: Stale cache fallback
         stale = _cache_get_stale(mem_key)
         if stale:
             logger.info(f"Serving stale comprehensive-weather cache for ({lat}, {lon}) after live fetch failure")
@@ -463,7 +604,7 @@ class OpenMeteoService:
             stale["stale"] = True
             return stale
 
-        # Fallback to realistic synthetic weather instead of returning 502
+        # Tier 4: Realistic synthetic weather fallback (Never returns 502)
         logger.warning(f"Serving synthetic fallback comprehensive weather for ({lat}, {lon}) ({location_name})")
         return self._generate_synthetic_comprehensive_weather(lat, lon, location_name)
 

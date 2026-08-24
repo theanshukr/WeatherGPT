@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
     OPEN_METEO_API_KEY: Optional[str] = None
     GEOCODING_BASE_URL: str = "https://geocoding-api.open-meteo.com/v1"
+    WEATHERAPI_KEY: Optional[str] = None
+    WEATHERAPI_BASE_URL: str = "https://api.weatherapi.com/v1"
     # Historical Weather (Archive) API — separate host from the forecast API.
     # Used for the /weather/climate-trend endpoint (item #4 of the
     # completion plan): simple "last N years" aggregates, not a full
