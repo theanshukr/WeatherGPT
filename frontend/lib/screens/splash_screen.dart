@@ -99,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           'assets/images/app_logo.png',
                           width: 90,
                           height: 90,
-                          fit: BoxFit.cover,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ).animate().scale(duration: 650.ms, curve: Curves.easeOutBack),
