@@ -23,7 +23,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   bool _obscureLoginPassword = true;
   bool _obscureSignupPassword = true;
 
-  static const String testEmail = 'tester@weathergpt.app';
+  static const String testEmail = 'test@weathergpt.com';
   static const String testPassword = 'WeatherTest@2026';
 
   @override

@@ -11,6 +11,7 @@ class SupabaseService {
   static Future<void> initialize() async {
     await Supabase.initialize(
       url: supabaseUrl,
+      // ignore: deprecated_member_use
       anonKey: supabaseAnonKey,
     );
   }
