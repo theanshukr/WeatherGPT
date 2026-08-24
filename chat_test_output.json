@@ -1,0 +1,42 @@
+{
+  "session_id": "9db8b975-0fab-4c55-84d4-14152426d66f",
+  "response": "Delhi, India में अभी तापमान 25.0°C है और मौसम Clear sky बना हुआ है।",
+  "language": "hi",
+  "primary_intent": "HOURLY_TIMELINE",
+  "secondary_intents": [],
+  "intent": "HOURLY_TIMELINE",
+  "persona_applied": "general",
+  "weather_data": {
+    "location": "Delhi, India",
+    "temperature": 25.0,
+    "condition": "Clear sky",
+    "weather_code": 0,
+    "humidity": 50.0,
+    "wind_speed": 10.0,
+    "precipitation": 0.0
+  },
+  "travel_assessment": null,
+  "farming_advisory": null,
+  "urban_advisory": null,
+  "climate_trend": null,
+  "risk_level": "LOW",
+  "tools_called": [
+    "query_understanding_fallback"
+  ],
+  "suggestions": [
+    "Will it rain tomorrow in Delhi, India?",
+    "Can I travel to Delhi, India tomorrow?",
+    "7-day forecast for Delhi, India"
+  ],
+  "audio_base64": null,
+  "audio_chunks": null,
+  "persona_confirmation": null,
+  "inferred_personas": {
+    "farmer": 0.0,
+    "traveler": 0.0,
+    "daily_commuter": 0.0,
+    "student": 0.0,
+    "outdoor_worker": 0.0,
+    "urban_worker": 0.0
+  }
+}
