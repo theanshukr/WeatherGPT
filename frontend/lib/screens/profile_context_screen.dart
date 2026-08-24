@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user_context.dart';
@@ -6,6 +7,7 @@ import '../models/alert_model.dart';
 import '../providers/user_context_provider.dart';
 import '../providers/weather_provider.dart';
 import '../services/alert_service.dart';
+import '../widgets/gemini_sparkle_icon.dart';
 import 'alerts_screen.dart';
 
 class ProfileContextScreen extends StatefulWidget {
@@ -27,7 +29,6 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
     _loadRecentAlerts();
   }
 
-  /// Fetch real alerts from backend instead of hardcoded data
   Future<void> _loadRecentAlerts() async {
     try {
       final weatherProv = context.read<WeatherProvider>();
@@ -42,7 +43,7 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
 
       if (mounted) {
         setState(() {
-          _recentAlerts = alerts.take(5).toList(); // Show up to 5 recent
+          _recentAlerts = alerts.take(5).toList();
           _alertsLoading = false;
         });
       }
@@ -62,6 +63,7 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
     final userContext = contextProv.userContext;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -77,36 +79,29 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
                         IconButton(
                           icon: Icon(
                             Icons.chevron_left_rounded,
-                            size: 30,
+                            size: 28,
                             color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                      Icon(
-                        Icons.person_rounded,
-                        size: 26,
-                        color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                      ),
+                      const GeminiSparkleIcon(size: 24),
                       const SizedBox(width: 10),
                       Text(
-                        'Profile & Memory',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        'AI Intelligence & Memory',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.emeraldNeon.withValues(alpha: 0.12)
-                          : AppColors.emeraldDark.withValues(alpha: 0.08),
+                      color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isDark
-                            ? AppColors.emeraldNeon.withValues(alpha: 0.25)
-                            : AppColors.emeraldDark.withValues(alpha: 0.15),
+                        color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                       ),
                     ),
                     child: Row(
@@ -115,18 +110,18 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            color: AppColors.geminiCyan,
                           ),
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'AI Synced',
-                          style: TextStyle(
+                          'Gemini Synced',
+                          style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                           ),
                         ),
                       ],
@@ -143,24 +138,20 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
                   children: [
                     const SizedBox(height: 12),
 
-                    // User Profile Avatar with Glowing Ring
+                    // User Profile Avatar with Gemini Gradient Ring
                     Stack(
                       alignment: Alignment.bottomRight,
                       children: [
                         Container(
-                          width: 98,
-                          height: 98,
+                          width: 96,
+                          height: 96,
                           padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                              width: 2.2,
-                            ),
+                            gradient: AppColors.geminiSparkleGradient,
                             boxShadow: [
                               BoxShadow(
-                                color: (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                                    .withValues(alpha: 0.25),
+                                color: AppColors.geminiBlue.withValues(alpha: 0.25),
                                 blurRadius: 20,
                                 spreadRadius: 2,
                               ),
@@ -170,10 +161,10 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
                             borderRadius: BorderRadius.circular(50),
                             child: Container(
                               color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                              child: Icon(
+                              child: const Icon(
                                 Icons.person_rounded,
-                                size: 54,
-                                color: isDark ? AppColors.emeraldGlow : AppColors.emeraldDark,
+                                size: 52,
+                                color: Colors.white,
                               ),
                             ),
                           ),
@@ -182,316 +173,212 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            color: AppColors.geminiBlue,
                             border: Border.all(
                               color: isDark ? AppColors.darkBackground : Colors.white,
                               width: 2,
                             ),
                           ),
                           child: const Icon(
-                            Icons.camera_alt_rounded,
-                            size: 14,
-                            color: Colors.black,
+                            Icons.auto_awesome_rounded,
+                            size: 13,
+                            color: Colors.white,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 14),
 
-                    // Profile Name — from actual user context
+                    // User Name & Tag
                     Text(
                       userContext.userName,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 4),
-
-                    // Active Persona Pill Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _getPersonaEmoji(contextProv.currentPersona),
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Active Persona: ${_getPersonaTitle(contextProv.currentPersona)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                            ),
-                          ),
-                        ],
+                    Text(
+                      'AI Weather Telemetry Profile',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                       ),
                     ),
 
                     const SizedBox(height: 24),
 
-                    // SECTION: ALERTS YOU RECEIVED — from real backend data
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.notifications_active_outlined,
-                              size: 18,
-                              color: isDark ? AppColors.sunnyGold : AppColors.alertCrimson,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Active Alerts',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          ],
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AlertsScreen()),
-                            );
-                          },
-                          child: Text(
-                            'View All',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                            ),
+                    // Active Persona Selector Card (Gemini Style)
+                    _buildSectionCard(
+                      context,
+                      isDark: isDark,
+                      title: 'Active Intelligence Persona',
+                      subtitle: 'Adapts WeatherGPT responses, risk thresholds, and voice tone.',
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              _buildPersonaTile(
+                                context,
+                                persona: DetectedPersona.farmer,
+                                icon: '🌾',
+                                title: 'Farmer',
+                                isDark: isDark,
+                              ),
+                              const SizedBox(width: 8),
+                              _buildPersonaTile(
+                                context,
+                                persona: DetectedPersona.traveller,
+                                icon: '✈️',
+                                title: 'Traveller',
+                                isDark: isDark,
+                              ),
+                              const SizedBox(width: 8),
+                              _buildPersonaTile(
+                                context,
+                                persona: DetectedPersona.general,
+                                icon: '☀️',
+                                title: 'General',
+                                isDark: isDark,
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Real alerts from backend
-                    if (_alertsLoading)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Loading alerts...',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (_recentAlerts.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline_rounded,
-                              size: 32,
-                              color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No active weather alerts',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _recentAlerts.length,
-                        itemBuilder: (context, index) {
-                          final alert = _recentAlerts[index];
-                          final isCritical = alert.severity == AlertSeverity.emergency;
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(14),
+                          const SizedBox(height: 12),
+                          // Inferred Confidence Progress Bar
+                          Container(
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isCritical
-                                    ? AppColors.alertCrimson.withValues(alpha: 0.4)
-                                    : (isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder),
-                              ),
+                              color: isDark ? const Color(0xFF131314) : const Color(0xFFF0F4F9),
+                              borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isCritical
-                                        ? AppColors.alertCrimson.withValues(alpha: 0.15)
-                                        : (isDark ? AppColors.emeraldNeon.withValues(alpha: 0.15) : AppColors.emeraldDark.withValues(alpha: 0.1)),
-                                  ),
-                                  child: Icon(
-                                    isCritical ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
-                                    size: 18,
-                                    color: isCritical
-                                        ? AppColors.alertCrimson
-                                        : (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
+                                const Icon(Icons.psychology_rounded, size: 18, color: AppColors.geminiPurple),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        alert.title,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                      ),
-                                      if (alert.description.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          alert.description,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                                            height: 1.35,
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'AI Behavioral Inference',
+                                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
                                           ),
+                                          Text(
+                                            '${(userContext.confidenceScore * 100).toInt()}%',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.geminiBlue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: LinearProgressIndicator(
+                                          value: userContext.confidenceScore,
+                                          minHeight: 5,
+                                          backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                                          valueColor: const AlwaysStoppedAnimation(AppColors.geminiBlue),
                                         ),
-                                      ],
+                                      ),
                                     ],
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        },
-                      ),
-
-                    const SizedBox(height: 20),
-
-                    // SECTION: AI DETECTED CONTEXT & INTERESTS
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'AI Context & Detected Interests',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        userContext.detectedInterests.isEmpty
-                            ? 'Chat with WeatherGPT to build your personalized interest profile.'
-                            : 'WeatherGPT remembers your key meteorological topics to customize briefings.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Detected Interests Chips
-                    if (userContext.detectedInterests.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 10,
-                          children: userContext.detectedInterests.map((interest) {
-                            return Chip(
-                              label: Text(
-                                interest,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                ),
-                              ),
-                              backgroundColor: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                              side: BorderSide(
-                                color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                              ),
-                              deleteIcon: const Icon(Icons.close_rounded, size: 15),
-                              onDeleted: () => contextProv.removeInterest(interest),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-
-                    const SizedBox(height: 24),
-
-                    // Quick Switch Persona Card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Switch Persona Mode',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              _buildPersonaChoice(context, persona: DetectedPersona.farmer, label: '🌾 Farmer'),
-                              const SizedBox(width: 8),
-                              _buildPersonaChoice(context, persona: DetectedPersona.traveller, label: '✈️ Traveller'),
-                              const SizedBox(width: 8),
-                              _buildPersonaChoice(context, persona: DetectedPersona.general, label: '☀️ General'),
-                            ],
                           ),
                         ],
                       ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Saved Meteorological Locations
+                    _buildSectionCard(
+                      context,
+                      isDark: isDark,
+                      title: 'Saved Locations & Monitored Basins',
+                      subtitle: 'Locations tracked for convective alerts & agricultural timelines.',
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 12),
+                          _buildLocationTile(context, name: 'New Delhi, India', coord: '28.61° N, 77.20° E', isPrimary: true, isDark: isDark),
+                          const SizedBox(height: 8),
+                          _buildLocationTile(context, name: 'Bengaluru, Karnataka', coord: '12.97° N, 77.59° E', isPrimary: false, isDark: isDark),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Recent Severe Warnings Shortcut Card
+                    _buildSectionCard(
+                      context,
+                      isDark: isDark,
+                      title: 'Active NDMA SACHET Warnings',
+                      subtitle: 'Official government CAP telemetry feeds.',
+                      trailing: TextButton(
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const AlertsScreen()));
+                        },
+                        child: const Text('View All', style: TextStyle(fontSize: 12, color: AppColors.geminiBlue)),
+                      ),
+                      child: _alertsLoading
+                          ? const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.geminiBlue)),
+                            )
+                          : _recentAlerts.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_rounded, color: AppColors.emeraldNeon, size: 20),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'No severe disaster warnings active.',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Column(
+                                  children: _recentAlerts.map((alert) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? const Color(0xFF131314) : const Color(0xFFF0F4F9),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.alertCrimson),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                alert.title,
+                                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
                     ),
 
                     const SizedBox(height: 80),
@@ -505,74 +392,141 @@ class _ProfileContextScreenState extends State<ProfileContextScreen> {
     );
   }
 
-  String _getPersonaEmoji(DetectedPersona persona) {
-    switch (persona) {
-      case DetectedPersona.farmer:
-        return '🌾';
-      case DetectedPersona.traveller:
-        return '✈️';
-      case DetectedPersona.student:
-        return '📚';
-      case DetectedPersona.commuter:
-        return '🚗';
-      case DetectedPersona.general:
-        return '☀️';
-    }
+  Widget _buildSectionCard(
+    BuildContext context, {
+    required bool isDark,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              ?trailing,
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
   }
 
-  String _getPersonaTitle(DetectedPersona persona) {
-    switch (persona) {
-      case DetectedPersona.farmer:
-        return 'Farmer Intelligence';
-      case DetectedPersona.traveller:
-        return 'Traveller & Commuter';
-      case DetectedPersona.student:
-        return 'Student Campus Weather';
-      case DetectedPersona.commuter:
-        return 'Daily Commuter';
-      case DetectedPersona.general:
-        return 'General Assistant';
-    }
-  }
-
-  Widget _buildPersonaChoice(
+  Widget _buildPersonaTile(
     BuildContext context, {
     required DetectedPersona persona,
-    required String label,
+    required String icon,
+    required String title,
+    required bool isDark,
   }) {
     final contextProv = context.watch<UserContextProvider>();
     final isSelected = contextProv.currentPersona == persona;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Expanded(
       child: GestureDetector(
         onTap: () => contextProv.setPersona(persona),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? AppColors.emeraldNeon.withValues(alpha: 0.2) : AppColors.emeraldDark.withValues(alpha: 0.15))
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+                ? (isDark ? AppColors.geminiBlue.withValues(alpha: 0.18) : const Color(0xFFE8F0FE))
+                : (isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected
-                  ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                  : (isDark ? Colors.white12 : Colors.black12),
+              color: isSelected ? AppColors.geminiBlue : (isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder),
+              width: isSelected ? 1.4 : 1,
             ),
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected
-                    ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                    : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+          child: Column(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? AppColors.geminiBlue : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                ),
               ),
-            ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLocationTile(
+    BuildContext context, {
+    required String name,
+    required String coord,
+    required bool isPrimary,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131314) : const Color(0xFFF0F4F9),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_city_rounded, size: 18, color: AppColors.geminiBlue),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(coord, style: TextStyle(fontSize: 11, color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary)),
+                ],
+              ),
+            ],
+          ),
+          if (isPrimary)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.geminiBlue.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text('Primary', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.geminiBlue)),
+            ),
+        ],
       ),
     );
   }

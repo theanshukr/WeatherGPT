@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_colors.dart';
-import '../widgets/dynamic_weather_orb.dart';
+import '../widgets/gemini_sparkle_icon.dart';
 import '../services/supabase_service.dart';
 import 'onboarding_screen.dart';
 import 'main_navigation_screen.dart';
@@ -60,24 +61,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Background ambient emerald aura
+          // Ambient Gemini Aurora Glow
           if (isDark)
             Positioned(
-              top: MediaQuery.of(context).size.height * 0.25,
+              top: MediaQuery.of(context).size.height * 0.28,
               child: Container(
-                width: 280,
-                height: 280,
+                width: 300,
+                height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.emeraldNeon.withValues(alpha: 0.12),
+                  color: AppColors.geminiBlue.withValues(alpha: 0.12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.emeraldNeon.withValues(alpha: 0.2),
-                      blurRadius: 130,
-                      spreadRadius: 50,
+                      color: AppColors.geminiPurple.withValues(alpha: 0.20),
+                      blurRadius: 150,
+                      spreadRadius: 60,
                     ),
                   ],
                 ),
@@ -91,31 +93,37 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               children: [
                 const Spacer(flex: 3),
 
-                // Center Dynamic Orb
-                const DynamicWeatherOrb(
-                  size: 160,
-                  orbState: VoiceOrbState.idle,
+                // Radiant Gemini 4-Point Sparkle Icon
+                const GeminiSparkleIcon(
+                  size: 110,
+                  animate: true,
                 ),
 
-                const SizedBox(height: 36),
+                const SizedBox(height: 32),
 
-                // Brand Name
-                Text(
-                  'WeatherGPT',
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
+                // Brand Name with Gemini Gradient Shader
+                ShaderMask(
+                  shaderCallback: (bounds) => AppColors.geminiSparkleGradient.createShader(bounds),
+                  child: Text(
+                    'WeatherGPT',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.8,
+                    ),
+                  ),
                 ),
+
                 const SizedBox(height: 8),
 
                 // Tagline
                 Text(
-                  'AI Weather & Disaster Intelligence',
-                  style: TextStyle(
-                    fontSize: 14,
+                  'AI Weather & Early Warning Intelligence',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.emeraldGlow : AppColors.emeraldDark,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                     letterSpacing: 0.2,
                   ),
                 ),
@@ -129,7 +137,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     valueColor: AlwaysStoppedAnimation(
-                      isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                      isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
                     ),
                   ),
                 ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user_context.dart';
@@ -6,6 +7,7 @@ import '../providers/theme_provider.dart';
 import '../providers/user_context_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/voice_provider.dart';
+import '../widgets/gemini_sparkle_icon.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -53,31 +55,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  Icon(
-                    Icons.security_rounded,
-                    color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                    size: 24,
-                  ),
+                  const GeminiSparkleIcon(size: 24),
                   const SizedBox(width: 10),
                   Text(
                     'Privacy & Data Policy',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               Text(
                 'At WeatherGPT, your privacy and atmospheric data ownership are paramount. Here is how your data is handled:',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                style: GoogleFonts.inter(fontSize: 13, height: 1.5),
               ),
               const SizedBox(height: 16),
               _buildPrivacyPoint(
                 context,
                 title: '📍 Location Intelligence',
                 description:
-                    'Your GPS coordinates are used exclusively to fetch localized real-time radar and meteorological data. They are never sold or shared with advertisers.',
+                    'Your GPS coordinates are used exclusively to fetch localized real-time radar and meteorological data. They are never sold or shared.',
               ),
               _buildPrivacyPoint(
                 context,
@@ -98,14 +97,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   width: double.infinity,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                    gradient: AppColors.geminiSparkleGradient,
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Center(
                     child: Text(
                       'I Understand',
-                      style: TextStyle(
-                        color: isDark ? Colors.black : Colors.white,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),
@@ -138,15 +137,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
             ),
             const SizedBox(height: 4),
             Text(
               description,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    height: 1.4,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                  ),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                height: 1.4,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
             ),
           ],
         ),
@@ -196,6 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeProv = context.watch<ThemeProvider>();
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -204,17 +205,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.tune_rounded,
-                    size: 26,
-                    color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-                  ),
+                  const GeminiSparkleIcon(size: 24),
                   const SizedBox(width: 12),
                   Text(
                     'Settings',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -232,8 +230,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildSwitchTile(
                         context,
                         icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                        title: 'Dark Mode (OLED Emerald)',
-                        subtitle: isDark ? 'OLED pitch-black theme enabled' : 'Clean frosted light theme',
+                        title: 'Dark Mode (Gemini Charcoal)',
+                        subtitle: isDark ? 'Gemini charcoal OLED theme' : 'Frosted cloud light theme',
                         value: isDark,
                         onChanged: (val) => themeProv.toggleTheme(),
                       ),
@@ -260,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context,
                         icon: Icons.warning_amber_rounded,
                         title: 'Severe Weather Alerts',
-                        subtitle: 'Proactive warnings for storms, heatwaves & gale winds',
+                        subtitle: 'Proactive warnings for storms, heatwaves & NDMA CAP alerts',
                         value: _severeAlertsEnabled,
                         onChanged: (val) => setState(() => _severeAlertsEnabled = val),
                       ),
@@ -288,7 +286,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 20),
 
                   // SECTION 3: AI PERSONA & VOICE
-                  _buildSectionHeader(context, title: 'AI Persona & Voice Mode'),
+                  _buildSectionHeader(context, title: 'AI Persona & Voice Engine'),
                   _buildCard(
                     context,
                     children: [
@@ -329,7 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               context,
                               icon: Icons.record_voice_over_rounded,
                               title: 'Voice Auto-Speech Feedback',
-                              subtitle: 'Automatically read WeatherGPT\'s replies aloud',
+                              subtitle: 'Automatically read WeatherGPT\'s replies aloud in voice mode',
                               value: voiceProvider.autoSpeechEnabled,
                               onChanged: voiceProvider.setAutoSpeechEnabled,
                             ),
@@ -337,10 +335,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             _buildSwitchTile(
                               context,
                               icon: Icons.graphic_eq_rounded,
-                              title: 'Natural Voice (Cloud)',
+                              title: 'Natural AI Voice (Sarvam Cloud)',
                               subtitle: voiceProvider.naturalVoiceEnabled
-                                  ? 'Higher-quality voice \u2014 uses data, needs network'
-                                  : 'Off: using free on-device voice, works offline',
+                                  ? 'Active: Anushka / Megha natural voice via Sarvam AI'
+                                  : 'Off: Using system on-device voice',
                               value: voiceProvider.naturalVoiceEnabled,
                               onChanged: voiceProvider.setNaturalVoiceEnabled,
                             ),
@@ -371,7 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: ListTile(
                           leading: Icon(
                             Icons.privacy_tip_outlined,
-                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
                           ),
                           title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                           subtitle: const Text('Read our zero-tracking data promise', style: TextStyle(fontSize: 12)),
@@ -436,7 +434,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.8,
-          color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+          color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
         ),
       ),
     );
@@ -472,10 +470,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: SwitchListTile(
         value: value,
         onChanged: onChanged,
-        activeThumbColor: AppColors.emeraldNeon,
+        activeTrackColor: AppColors.geminiBlue,
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return null;
+        }),
         secondary: Icon(
           icon,
-          color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+          color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
           size: 22,
         ),
         title: Text(
@@ -509,12 +511,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? AppColors.emeraldNeon.withValues(alpha: 0.2) : AppColors.emeraldDark.withValues(alpha: 0.15))
+                ? (isDark ? AppColors.geminiBlue.withValues(alpha: 0.20) : const Color(0xFFE8F0FE))
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                  ? AppColors.geminiBlue
                   : (isDark ? Colors.white12 : Colors.black12),
             ),
           ),
@@ -525,7 +527,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected
-                    ? (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
+                    ? (isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8))
                     : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
               ),
             ),

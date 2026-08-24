@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import '../core/theme/app_colors.dart';
 import '../models/alert_model.dart';
 import '../services/alert_service.dart';
 import '../services/location_service.dart';
+import '../widgets/gemini_sparkle_icon.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -65,6 +67,7 @@ class _MapScreenState extends State<MapScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       body: Stack(
         children: [
           // 1. Interactive GIS Map with Tile Layers
@@ -102,7 +105,7 @@ class _MapScreenState extends State<MapScreen> {
                       ? AppColors.alertCrimson
                       : (alert.severity == AlertSeverity.warning
                           ? AppColors.sunnyGold
-                          : AppColors.electricCyan);
+                          : AppColors.geminiCyan);
                   return CircleMarker(
                     point: LatLng(alert.latitude, alert.longitude),
                     radius: isEmergency ? 45000 : 30000,
@@ -126,7 +129,7 @@ class _MapScreenState extends State<MapScreen> {
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('📍 Current Location (${_userLocation.latitude.toStringAsFixed(2)}, ${_userLocation.longitude.toStringAsFixed(2)})'),
+                            content: Text('📍 Location (${_userLocation.latitude.toStringAsFixed(2)}, ${_userLocation.longitude.toStringAsFixed(2)})'),
                             duration: const Duration(seconds: 2),
                           ),
                         );
@@ -139,7 +142,7 @@ class _MapScreenState extends State<MapScreen> {
                             height: 32,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.emeraldNeon.withValues(alpha: 0.25),
+                              color: AppColors.geminiBlue.withValues(alpha: 0.25),
                             ),
                           ),
                           Container(
@@ -147,11 +150,11 @@ class _MapScreenState extends State<MapScreen> {
                             height: 18,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.emeraldNeon,
+                              color: AppColors.geminiBlue,
                               border: Border.all(color: Colors.white, width: 2.5),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.emeraldNeon.withValues(alpha: 0.8),
+                                  color: AppColors.geminiBlue.withValues(alpha: 0.8),
                                   blurRadius: 10,
                                 ),
                               ],
@@ -169,7 +172,7 @@ class _MapScreenState extends State<MapScreen> {
                         ? AppColors.alertCrimson
                         : (alert.severity == AlertSeverity.warning
                             ? AppColors.sunnyGold
-                            : AppColors.tealAccent);
+                            : AppColors.geminiCyan);
 
                     return Marker(
                       point: LatLng(alert.latitude, alert.longitude),
@@ -229,8 +232,8 @@ class _MapScreenState extends State<MapScreen> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.85)
-                            : AppColors.lightSurface.withValues(alpha: 0.9),
+                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.90)
+                            : AppColors.lightSurface.withValues(alpha: 0.95),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
@@ -240,20 +243,20 @@ class _MapScreenState extends State<MapScreen> {
                         ],
                       ),
                       child: Icon(
-                        Icons.arrow_back_rounded,
+                        Icons.arrow_back_ios_new_rounded,
                         color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                        size: 22,
+                        size: 18,
                       ),
                     ),
                   ),
 
-                  // Map Title Pill
+                  // Map Title Pill (Gemini Sparkle + GIS Radar)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? AppColors.darkSurfaceElevated.withValues(alpha: 0.85)
-                          : AppColors.lightSurface.withValues(alpha: 0.9),
+                          ? AppColors.darkSurfaceElevated.withValues(alpha: 0.90)
+                          : AppColors.lightSurface.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
@@ -264,11 +267,11 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.public_rounded, color: AppColors.emeraldNeon, size: 18),
+                        const GeminiSparkleIcon(size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          'GIS Weather Radar & Alerts',
-                          style: TextStyle(
+                          'GIS Radar & Telemetry',
+                          style: GoogleFonts.plusJakartaSans(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
@@ -285,8 +288,8 @@ class _MapScreenState extends State<MapScreen> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.85)
-                            : AppColors.lightSurface.withValues(alpha: 0.9),
+                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.90)
+                            : AppColors.lightSurface.withValues(alpha: 0.95),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
@@ -297,8 +300,8 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                       child: const Icon(
                         Icons.my_location_rounded,
-                        color: AppColors.emeraldNeon,
-                        size: 22,
+                        color: AppColors.geminiCyan,
+                        size: 20,
                       ),
                     ),
                   ),
@@ -337,12 +340,12 @@ class _MapScreenState extends State<MapScreen> {
               child: Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
+                  color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: _selectedAlert!.severity == AlertSeverity.emergency
                         ? AppColors.alertCrimson.withValues(alpha: 0.5)
-                        : AppColors.emeraldNeon.withValues(alpha: 0.35),
+                        : AppColors.geminiBlue.withValues(alpha: 0.35),
                     width: 1.5,
                   ),
                   boxShadow: [
@@ -392,7 +395,7 @@ class _MapScreenState extends State<MapScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _selectedAlert!.title,
-                      style: const TextStyle(
+                      style: GoogleFonts.plusJakartaSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
@@ -413,12 +416,12 @@ class _MapScreenState extends State<MapScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkGlassFill : AppColors.lightSurfaceElevated,
+                          color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.shield_outlined, size: 16, color: AppColors.emeraldNeon),
+                            const Icon(Icons.shield_outlined, size: 16, color: AppColors.geminiCyan),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -437,7 +440,7 @@ class _MapScreenState extends State<MapScreen> {
 
           if (_isLoading)
             const Center(
-              child: CircularProgressIndicator(color: AppColors.emeraldNeon),
+              child: CircularProgressIndicator(color: AppColors.geminiBlue),
             ),
         ],
       ),
@@ -456,14 +459,14 @@ class _MapScreenState extends State<MapScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.emeraldNeon
+              ? AppColors.geminiBlue
               : (isDark
                   ? AppColors.darkSurfaceElevated.withValues(alpha: 0.85)
                   : AppColors.lightSurface.withValues(alpha: 0.9)),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
-                ? AppColors.emeraldNeon
+                ? AppColors.geminiBlue
                 : (isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder),
           ),
           boxShadow: const [
@@ -476,7 +479,7 @@ class _MapScreenState extends State<MapScreen> {
               icon,
               size: 14,
               color: isSelected
-                  ? Colors.black
+                  ? Colors.white
                   : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
             ),
             const SizedBox(width: 6),
@@ -486,7 +489,7 @@ class _MapScreenState extends State<MapScreen> {
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 color: isSelected
-                    ? Colors.black
+                    ? Colors.white
                     : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
               ),
             ),

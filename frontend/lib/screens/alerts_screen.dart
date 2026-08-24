@@ -5,6 +5,7 @@ import '../core/theme/app_colors.dart';
 import '../models/alert_model.dart';
 import '../providers/weather_provider.dart';
 import '../services/alert_service.dart';
+import '../widgets/gemini_sparkle_icon.dart';
 import 'map_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
@@ -66,9 +67,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
       case AlertSeverity.warning:
         return AppColors.sunnyGold;
       case AlertSeverity.watch:
-        return AppColors.electricCyan;
+        return AppColors.geminiCyan;
       case AlertSeverity.advisory:
-        return AppColors.emeraldNeon;
+        return AppColors.geminiBlue;
     }
   }
 
@@ -90,23 +91,30 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(
-            Icons.chevron_left_rounded,
-            size: 32,
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
             color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Severe Weather Advisories',
-          style: GoogleFonts.plusJakartaSans(fontSize: 17, fontWeight: FontWeight.w700),
+        title: Row(
+          children: [
+            const GeminiSparkleIcon(size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'Severe Weather & CAP Feeds',
+              style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
         actions: [
           IconButton(
             icon: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
@@ -114,7 +122,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
                 ),
               ),
-              child: const Icon(Icons.public_rounded, color: AppColors.emeraldNeon, size: 18),
+              child: const Icon(Icons.public_rounded, color: AppColors.geminiCyan, size: 18),
             ),
             tooltip: 'View on GIS Radar Map',
             onPressed: () {
@@ -128,13 +136,13 @@ class _AlertsScreenState extends State<AlertsScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.emeraldNeon))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.geminiBlue))
           : _error != null
               ? _buildErrorState(isDark)
               : _alerts.isEmpty
                   ? _buildEmptyState(isDark)
                   : RefreshIndicator(
-                      color: AppColors.emeraldNeon,
+                      color: AppColors.geminiBlue,
                       onRefresh: _loadAlerts,
                       child: ListView.builder(
                         padding: const EdgeInsets.all(20),
@@ -146,7 +154,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                             margin: const EdgeInsets.only(bottom: 16),
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
+                              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(
                                 color: sColor.withValues(alpha: 0.35),
@@ -185,18 +193,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: isDark ? AppColors.darkSurface : AppColors.lightSurfaceElevated,
+                                          color: isDark ? const Color(0xFF131314) : const Color(0xFFF0F4F9),
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: isDark ? Colors.white12 : Colors.black12,
-                                          ),
                                         ),
                                         child: Text(
                                           alert.source.toUpperCase(),
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 9,
                                             fontWeight: FontWeight.w700,
-                                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                                            color: AppColors.geminiBlue,
                                           ),
                                         ),
                                       ),
@@ -237,7 +242,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      color: isDark ? AppColors.darkGlassFill : AppColors.lightSurfaceElevated,
+                                      color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                         color: isDark ? AppColors.darkCardBorder : AppColors.lightCardBorder,
@@ -282,15 +287,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark).withValues(alpha: 0.1),
+                color: AppColors.geminiBlue.withValues(alpha: 0.1),
                 border: Border.all(
-                  color: (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark).withValues(alpha: 0.25),
+                  color: AppColors.geminiBlue.withValues(alpha: 0.25),
                 ),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.check_circle_outline_rounded,
                 size: 48,
-                color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                color: AppColors.geminiCyan,
               ),
             ),
             const SizedBox(height: 20),
@@ -328,8 +333,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
           const SizedBox(height: 12),
           TextButton.icon(
             onPressed: _loadAlerts,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Retry'),
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.geminiBlue),
+            label: const Text('Retry', style: TextStyle(color: AppColors.geminiBlue)),
           ),
         ],
       ),

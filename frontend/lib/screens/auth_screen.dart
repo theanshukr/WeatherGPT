@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme/app_colors.dart';
 import '../services/supabase_service.dart';
+import '../widgets/gemini_sparkle_icon.dart';
 import 'main_navigation_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -61,11 +62,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   }
 
   /// Proper Auth Login using the designated Testing Account.
-  ///
-  /// Retries sign-in for transient errors and only falls back to sign-up
-  /// when Supabase explicitly says the credentials are invalid (meaning the
-  /// user was never created).  This avoids burning the free-tier SMTP email
-  /// quota on every retry.
   Future<void> _handleTestAccountLogin() async {
     _loginEmailController.text = testEmail;
     _loginPasswordController.text = testPassword;
@@ -89,17 +85,13 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             );
           }
           _navigateToHome();
-          return; // success — exit early
+          return;
         } on AuthException catch (e) {
           lastAuthErr = e;
-          // "invalid_credentials" means the user doesn't exist yet — no point retrying
           if (e.statusCode == '400') break;
-          // Rate-limit — surface immediately, don't retry
           if (e.statusCode == '429') break;
-          // Transient error — wait briefly then retry
           await Future.delayed(const Duration(milliseconds: 800));
         } catch (_) {
-          // Network / timeout — wait briefly then retry
           await Future.delayed(const Duration(milliseconds: 800));
         }
       }
@@ -124,7 +116,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           }
         }
       } else {
-        // Rate-limit or network error — show a helpful message
         final msg = lastAuthErr != null
             ? 'Supabase auth error: ${lastAuthErr.message}'
             : 'Could not reach Supabase. Check your internet connection.';
@@ -216,10 +207,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       body: SafeArea(
         child: Stack(
           children: [
-            // Ambient glowing aura
+            // Ambient Gemini Radiant Aura
             if (isDark) ...[
               Positioned(
                 top: -80,
@@ -229,31 +221,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                   height: 280,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.emeraldNeon.withValues(alpha: 0.14),
+                    color: AppColors.geminiBlue.withValues(alpha: 0.10),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.emeraldNeon.withValues(alpha: 0.22),
+                        color: AppColors.geminiPurple.withValues(alpha: 0.16),
                         blurRadius: 130,
                         spreadRadius: 40,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 40,
-                left: -60,
-                child: Container(
-                  width: 240,
-                  height: 240,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF00E5FF).withValues(alpha: 0.08),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
-                        blurRadius: 120,
-                        spreadRadius: 30,
                       ),
                     ],
                   ),
@@ -268,30 +241,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                 children: [
                   const SizedBox(height: 12),
 
-                  // Brand Icon & Title
+                  // Gemini Sparkle & Title
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const RadialGradient(
-                            colors: [Color(0xFF00FF87), Color(0xFF059669)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.emeraldNeon.withValues(alpha: 0.35),
-                              blurRadius: 16,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.auto_awesome_rounded,
-                          color: Colors.black,
-                          size: 22,
-                        ),
-                      ),
+                      const GeminiSparkleIcon(size: 38),
                       const SizedBox(width: 14),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,7 +258,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                             ),
                           ),
                           Text(
-                            'AI Weather & Early Warning',
+                            'AI Weather & Early Warning Intelligence',
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -332,18 +285,17 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                     child: TabBar(
                       controller: _tabController,
                       indicator: BoxDecoration(
-                        color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                        gradient: AppColors.geminiSparkleGradient,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark)
-                                .withValues(alpha: 0.3),
+                            color: AppColors.geminiBlue.withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      labelColor: isDark ? Colors.black : Colors.white,
+                      labelColor: Colors.white,
                       unselectedLabelColor: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                       labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
                       unselectedLabelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
@@ -383,7 +335,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.8,
-                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            color: isDark ? AppColors.geminiBlue : const Color(0xFF1A73E8),
                           ),
                         ),
                       ),
@@ -393,7 +345,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 
                   const SizedBox(height: 18),
 
-                  // Proper Testing Account Login Button (Authenticates via Supabase Auth)
+                  // Testing Account Login Button
                   GestureDetector(
                     onTap: _isLoading ? null : _handleTestAccountLogin,
                     child: Container(
@@ -404,8 +356,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                         borderRadius: BorderRadius.circular(26),
                         border: Border.all(
                           color: isDark
-                              ? AppColors.emeraldNeon.withValues(alpha: 0.4)
-                              : AppColors.emeraldDark.withValues(alpha: 0.3),
+                              ? AppColors.geminiBlue.withValues(alpha: 0.4)
+                              : AppColors.geminiBlue.withValues(alpha: 0.3),
                           width: 1.2,
                         ),
                       ),
@@ -415,7 +367,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                           Icon(
                             Icons.verified_user_rounded,
                             size: 20,
-                            color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
+                            color: isDark ? AppColors.geminiCyan : AppColors.geminiBlue,
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -560,7 +512,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         ),
         decoration: InputDecoration(
-          icon: Icon(icon, size: 20, color: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark),
+          icon: Icon(icon, size: 20, color: AppColors.geminiBlue),
           hintText: hint,
           hintStyle: GoogleFonts.inter(
             fontSize: 13,
@@ -581,28 +533,40 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     return SizedBox(
       width: double.infinity,
       height: 52,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isDark ? AppColors.emeraldNeon : AppColors.emeraldDark,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-          elevation: 4,
-          shadowColor: (isDark ? AppColors.emeraldNeon : AppColors.emeraldDark).withValues(alpha: 0.4),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.geminiSparkleGradient,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.geminiBlue.withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-        onPressed: _isLoading ? null : onPressed,
-        child: _isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-              )
-            : Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.black : Colors.white,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+          ),
+          onPressed: _isLoading ? null : onPressed,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
