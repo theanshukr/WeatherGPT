@@ -30,7 +30,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _isLoading = true;
   String _selectedFilter = 'All Hazards';
   bool _isPlayingRadar = true;
-  double _radarOpacity = 0.65;
   int _activeRadarFrame = 0;
   Timer? _radarTimer;
 
