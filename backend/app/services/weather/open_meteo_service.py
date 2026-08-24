@@ -200,8 +200,8 @@ class OpenMeteoService:
             "fallback": True,
         }
 
-    async def _fetch_with_retry(self, client: httpx.AsyncClient, url: str, params: dict, max_retries: int = 2) -> Optional[httpx.Response]:
-        """Fetch URL with exponential backoff on 429 responses and optional API key support."""
+    async def _fetch_with_retry(self, client: httpx.AsyncClient, url: str, params: dict, max_retries: int = 1) -> Optional[httpx.Response]:
+        """Fetch URL with fast-fail on 429 responses to transition immediately to WeatherAPI/fallback."""
         call_params = dict(params)
         call_url = url
         if settings.OPEN_METEO_API_KEY:
@@ -215,16 +215,17 @@ class OpenMeteoService:
                 if resp.status_code == 200:
                     return resp
                 if resp.status_code == 429:
-                    wait_time = min(2 ** attempt * 1.5, 10)  # 1.5s, 3s, 6s
-                    logger.info(f"Open-Meteo 429 rate limited, retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries + 1})")
-                    await asyncio.sleep(wait_time)
-                    continue
+                    if attempt < max_retries:
+                        await asyncio.sleep(0.5)
+                        continue
+                    logger.info("Open-Meteo IP 429 rate limited, switching to live WeatherAPI / fallback")
+                    return None
                 logger.warning(f"Open-Meteo returned status {resp.status_code}")
                 return None
             except httpx.TimeoutException:
                 logger.warning(f"Open-Meteo timeout (attempt {attempt + 1})")
                 if attempt < max_retries:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.5)
                     continue
                 return None
         return None
