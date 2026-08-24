@@ -25,6 +25,9 @@ class SarvamVoiceService:
     # "shubh" for male / "ritu" for female — anushka does not exist on v3).
     DEFAULT_TTS_MODEL = "bulbul:v2"
     DEFAULT_SPEAKER = "anushka"
+    DEFAULT_PITCH = 0.35  # Sweet, cheerful, youthful girl voice tone
+    DEFAULT_PACE = 1.04   # Lively, friendly conversational rhythm
+    DEFAULT_LOUDNESS = 1.6
 
     def __init__(self):
         self.api_key = settings.SARVAM_API_KEY
@@ -100,21 +103,17 @@ class SarvamVoiceService:
         text: str,
         target_language_code: str = "hi-IN",
         speaker: Optional[str] = None,
-        pitch: float = 0.0,
-        pace: float = 1.0,
-        loudness: float = 1.5,
+        pitch: Optional[float] = None,
+        pace: Optional[float] = None,
+        loudness: Optional[float] = None,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Convert response text to natural voice audio using Sarvam TTS API.
-
-        `speaker`/`model` default to None here on purpose: every call site
-        should get the SAME voice unless a caller explicitly overrides it
-        (e.g. a future user-selected voice preference). Resolving the
-        default here, in one place, is what stops the assistant's voice
-        from randomly switching gender between requests.
-        """
+        """Convert response text to natural sweet young girl voice audio using Sarvam TTS API."""
         resolved_model = model or self.DEFAULT_TTS_MODEL
         resolved_speaker = speaker or self.DEFAULT_SPEAKER
+        resolved_pitch = pitch if pitch is not None else self.DEFAULT_PITCH
+        resolved_pace = pace if pace is not None else self.DEFAULT_PACE
+        resolved_loudness = loudness if loudness is not None else self.DEFAULT_LOUDNESS
 
         if not self.api_key:
             logger.warning("SARVAM_API_KEY not configured for TTS.")
