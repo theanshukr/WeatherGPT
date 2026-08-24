@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../core/theme/app_colors.dart';
 import '../services/supabase_service.dart';
 import 'onboarding_screen.dart';
@@ -95,8 +96,8 @@ class _SplashScreenState extends State<SplashScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(26),
-                        child: Image.asset(
-                          'assets/images/app_logo.png',
+                        child: SvgPicture.asset(
+                          'assets/images/app_logo.svg',
                           width: 90,
                           height: 90,
                           fit: BoxFit.contain,

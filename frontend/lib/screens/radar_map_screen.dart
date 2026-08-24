@@ -5,13 +5,17 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import '../core/theme/app_colors.dart';
 import '../models/alert_model.dart';
 import '../services/alert_service.dart';
 import '../services/location_service.dart';
+import '../services/radar_service.dart';
 import '../widgets/svg_icon.dart';
 import '../widgets/bouncing_button.dart';
+
+enum WeatherMapStyle { streets, satellite, dark }
 
 class RadarMapScreen extends StatefulWidget {
   const RadarMapScreen({super.key});
@@ -23,17 +27,32 @@ class RadarMapScreen extends StatefulWidget {
 // Backward-compatible alias
 typedef MapScreen = RadarMapScreen;
 
-class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProviderStateMixin {
+class _RadarMapScreenState extends State<RadarMapScreen>
+    with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   final AlertService _alertService = AlertService();
   final LocationService _locationService = LocationService();
+  final RadarService _radarService = RadarService();
 
-  LatLng _userLocation = const LatLng(28.6139, 77.2090);
-  String _currentCityName = 'Locating GPS...';
+  LatLng _userLocation = LocationService.currentCachedLocation != null
+      ? LatLng(
+          LocationService.currentCachedLocation!.latitude,
+          LocationService.currentCachedLocation!.longitude,
+        )
+      : const LatLng(28.6139, 77.2090);
+  String _currentCityName = LocationService.currentCachedLocation?.name ?? 'My Location';
   List<WeatherAlert> _alerts = [];
   WeatherAlert? _selectedAlert;
-  bool _isLoadingGps = true;
+  bool _isLoadingGps = LocationService.currentCachedLocation == null;
   String _selectedFilter = 'All Hazards';
+
+  // Map Engine & Layer Style
+  WeatherMapStyle _mapStyle = WeatherMapStyle.streets;
+  bool _showRainRadar = true;
+  RadarTimelineData? _radarData;
+  int _currentRadarFrameIndex = 0;
+  bool _isPlayingRadar = false;
+  Timer? _radarPlayTimer;
 
   // Precise Live Meteorological Data for User Coordinates
   Map<String, dynamic>? _precisionWeather;
@@ -50,19 +69,22 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
 
+    // Instant offline GPS centering & background telemetry fetch
     _initInstantLocationAndData();
+    _loadRadarFrames();
   }
 
   @override
   void dispose() {
+    _radarPlayTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
-  /// 1. Instant Hardware GPS → IP Fallback → Full Resolution
+  /// 1. Instant Hardware GPS (0ms offline cache) → Map Camera Snap → Asynchronous Background Telemetry
   Future<void> _initInstantLocationAndData() async {
     try {
-      // Attempt cached location first for absolute instant snap
+      // Step A: Instant 0ms cached location snap (offline)
       final cachedLoc = LocationService.currentCachedLocation;
       if (cachedLoc != null && mounted) {
         final cachedLatLng = LatLng(cachedLoc.latitude, cachedLoc.longitude);
@@ -72,30 +94,48 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
           _isLoadingGps = false;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          try { _mapController.move(cachedLatLng, 14.0); } catch (_) {}
+          try {
+            _mapController.move(cachedLatLng, 14.0);
+          } catch (_) {}
         });
         _fetchPrecisionMeteorology(cachedLatLng.latitude, cachedLatLng.longitude);
       }
 
-      // Hardware GPS resolution
+      // Step B: Instant offline hardware GPS position query (zero network blocking)
+      try {
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null && mounted) {
+          final fastLatLng = LatLng(lastKnown.latitude, lastKnown.longitude);
+          setState(() {
+            _userLocation = fastLatLng;
+            _isLoadingGps = false;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            try {
+              _mapController.move(fastLatLng, 14.0);
+            } catch (_) {}
+          });
+          _fetchPrecisionMeteorology(fastLatLng.latitude, fastLatLng.longitude);
+        }
+      } catch (_) {}
+
+      // Step C: Live GPS sensor fix (fast hardware query)
       final rawPosition = await _locationService.getRawDevicePosition();
       if (rawPosition != null && mounted) {
-        final fastLatLng = LatLng(rawPosition.latitude, rawPosition.longitude);
+        final liveLatLng = LatLng(rawPosition.latitude, rawPosition.longitude);
         setState(() {
-          _userLocation = fastLatLng;
+          _userLocation = liveLatLng;
           _isLoadingGps = false;
         });
-
-        // Snap map camera immediately to exact user position (Google Maps style)
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          try { _mapController.move(fastLatLng, 14.0); } catch (_) {}
+          try {
+            _mapController.move(liveLatLng, 14.0);
+          } catch (_) {}
         });
-
-        // Fetch precision meteorological data asynchronously
-        _fetchPrecisionMeteorology(fastLatLng.latitude, fastLatLng.longitude);
+        _fetchPrecisionMeteorology(liveLatLng.latitude, liveLatLng.longitude);
       }
 
-      // Detailed location resolution & alerts in background
+      // Step D: Reverse geocoding & alerts in background (non-blocking)
       final detailedLoc = await _locationService.getCurrentLocation();
       if (mounted) {
         final detailedLatLng = LatLng(detailedLoc.latitude, detailedLoc.longitude);
@@ -108,12 +148,21 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
         // Move map if GPS was null earlier (IP fallback resolved)
         if (rawPosition == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            try { _mapController.move(detailedLatLng, 14.0); } catch (_) {}
+            try {
+              _mapController.move(detailedLatLng, 14.0);
+            } catch (_) {}
           });
-          _fetchPrecisionMeteorology(detailedLatLng.latitude, detailedLatLng.longitude);
+          _fetchPrecisionMeteorology(
+            detailedLatLng.latitude,
+            detailedLatLng.longitude,
+          );
         }
 
-        _loadAlerts(detailedLoc.latitude, detailedLoc.longitude, detailedLoc.name);
+        _loadAlerts(
+          detailedLoc.latitude,
+          detailedLoc.longitude,
+          detailedLoc.name,
+        );
       }
     } catch (e) {
       debugPrint('Location initialization error: $e');
@@ -138,25 +187,44 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
         final current = data['current'] ?? {};
         final hourly = data['hourly'] ?? {};
 
-        final probs = (hourly['precipitation_probability'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList() ?? [];
-        final visibilities = (hourly['visibility'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList() ?? [];
-        final dewPoints = (hourly['dew_point_2m'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList() ?? [];
+        final probs =
+            (hourly['precipitation_probability'] as List<dynamic>?)
+                ?.map((e) => (e as num).toDouble())
+                .toList() ??
+            [];
+        final visibilities =
+            (hourly['visibility'] as List<dynamic>?)
+                ?.map((e) => (e as num).toDouble())
+                .toList() ??
+            [];
+        final dewPoints =
+            (hourly['dew_point_2m'] as List<dynamic>?)
+                ?.map((e) => (e as num).toDouble())
+                .toList() ??
+            [];
 
         final rainProb = probs.isNotEmpty ? probs.first : 0.0;
-        final visibilityKm = visibilities.isNotEmpty ? (visibilities.first / 1000.0) : 10.0;
+        final visibilityKm = visibilities.isNotEmpty
+            ? (visibilities.first / 1000.0)
+            : 10.0;
         final dewPoint = dewPoints.isNotEmpty ? dewPoints.first : 18.0;
 
         if (mounted) {
           setState(() {
             _precisionWeather = {
               'temp': (current['temperature_2m'] as num?)?.toDouble() ?? 28.0,
-              'feels_like': (current['apparent_temperature'] as num?)?.toDouble() ?? 29.0,
+              'feels_like':
+                  (current['apparent_temperature'] as num?)?.toDouble() ?? 29.0,
               'rain_mm': (current['precipitation'] as num?)?.toDouble() ?? 0.0,
               'rain_prob': rainProb,
-              'wind_speed': (current['wind_speed_10m'] as num?)?.toDouble() ?? 10.0,
-              'wind_gusts': (current['wind_gusts_10m'] as num?)?.toDouble() ?? 14.0,
-              'humidity': (current['relative_humidity_2m'] as num?)?.toInt() ?? 55,
-              'pressure': (current['surface_pressure'] as num?)?.toDouble() ?? 1012.0,
+              'wind_speed':
+                  (current['wind_speed_10m'] as num?)?.toDouble() ?? 10.0,
+              'wind_gusts':
+                  (current['wind_gusts_10m'] as num?)?.toDouble() ?? 14.0,
+              'humidity':
+                  (current['relative_humidity_2m'] as num?)?.toInt() ?? 55,
+              'pressure':
+                  (current['surface_pressure'] as num?)?.toDouble() ?? 1012.0,
               'uv_index': (current['uv_index'] as num?)?.toDouble() ?? 5.0,
               'cloud_cover': (current['cloud_cover'] as num?)?.toInt() ?? 20,
               'dew_point': dewPoint,
@@ -203,18 +271,310 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
     return 'Clear';
   }
 
+  Future<void> _loadRadarFrames() async {
+    try {
+      final radar = await _radarService.getRadarTimeline();
+      if (radar != null && mounted) {
+        setState(() {
+          _radarData = radar;
+          _currentRadarFrameIndex = radar.defaultLiveIndex;
+        });
+      }
+    } catch (e) {
+      debugPrint('Radar frames fetch error: $e');
+    }
+  }
+
+  void _toggleRadarPlay() {
+    if (_radarData == null || _radarData!.frames.isEmpty) return;
+    if (_isPlayingRadar) {
+      _radarPlayTimer?.cancel();
+      setState(() => _isPlayingRadar = false);
+    } else {
+      setState(() => _isPlayingRadar = true);
+      _radarPlayTimer = Timer.periodic(const Duration(milliseconds: 750), (
+        timer,
+      ) {
+        if (!mounted || _radarData == null) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _currentRadarFrameIndex =
+              (_currentRadarFrameIndex + 1) % _radarData!.frames.length;
+        });
+      });
+    }
+  }
+
+  String _getMapUrlTemplate(bool isDark) {
+    switch (_mapStyle) {
+      case WeatherMapStyle.satellite:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      case WeatherMapStyle.dark:
+        return 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png';
+      case WeatherMapStyle.streets:
+        return isDark
+            ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png';
+    }
+  }
+
+  void _showMapLayersModal(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: isDark
+                      ? AppColors.darkCardBorder
+                      : const Color(0xFFE5E2EE),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 20,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Map Layers & Radar',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF111114),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'BASEMAP STYLE',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                      color: isDark
+                          ? AppColors.darkTextTertiary
+                          : const Color(0xFF8E8E93),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildStyleThumbnail(
+                        title: 'Streets HD',
+                        icon: Icons.map_rounded,
+                        color: const Color(0xFF3B82F6),
+                        isSelected: _mapStyle == WeatherMapStyle.streets,
+                        isDark: isDark,
+                        onTap: () {
+                          setState(() => _mapStyle = WeatherMapStyle.streets);
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      _buildStyleThumbnail(
+                        title: 'Satellite HD',
+                        icon: Icons.satellite_alt_rounded,
+                        color: const Color(0xFF10B981),
+                        isSelected: _mapStyle == WeatherMapStyle.satellite,
+                        isDark: isDark,
+                        onTap: () {
+                          setState(() => _mapStyle = WeatherMapStyle.satellite);
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      _buildStyleThumbnail(
+                        title: 'Dark Radar',
+                        icon: Icons.dark_mode_rounded,
+                        color: const Color(0xFF8B5CF6),
+                        isSelected: _mapStyle == WeatherMapStyle.dark,
+                        isDark: isDark,
+                        onTap: () {
+                          setState(() => _mapStyle = WeatherMapStyle.dark);
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF262338)
+                          : const Color(0xFFF7F6FB),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF0284C7,
+                                ).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.radar_rounded,
+                                color: Color(0xFF0284C7),
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Live Doppler Rain Radar',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF111114),
+                                  ),
+                                ),
+                                Text(
+                                  'RainViewer real-time rain clouds',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? AppColors.darkTextTertiary
+                                        : const Color(0xFF8E8E93),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Switch.adaptive(
+                          value: _showRainRadar,
+                          activeColor: const Color(0xFF0284C7),
+                          onChanged: (val) {
+                            setState(() => _showRainRadar = val);
+                            setModalState(() {});
+                            if (val && _radarData == null) {
+                              _loadRadarFrames();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStyleThumbnail({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required bool isSelected,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: IosBouncingButton(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withValues(alpha: 0.15)
+                : (isDark ? const Color(0xFF262338) : const Color(0xFFF7F6FB)),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? color
+                  : (isDark
+                        ? AppColors.darkCardBorder
+                        : const Color(0xFFE5E2EE)),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: isSelected
+                    ? color
+                    : (isDark ? Colors.white70 : Colors.black54),
+                size: 24,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? color
+                      : (isDark ? Colors.white : const Color(0xFF111114)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   List<WeatherAlert> get _filteredAlerts {
     final valid = _alerts.where((a) => a.id != 'telemetry_status').toList();
 
     if (_selectedFilter == '🌊 Flood & Rain') {
       return valid.where((a) {
         final t = a.title.toLowerCase();
-        return t.contains('flood') || t.contains('rain') || t.contains('shower');
+        return t.contains('flood') ||
+            t.contains('rain') ||
+            t.contains('shower');
       }).toList();
     } else if (_selectedFilter == '⚡ Severe Storms') {
       return valid.where((a) {
         final t = a.title.toLowerCase();
-        return t.contains('storm') || t.contains('lightning') || t.contains('thunder');
+        return t.contains('storm') ||
+            t.contains('lightning') ||
+            t.contains('thunder');
       }).toList();
     } else if (_selectedFilter == '🌡️ Heat & Wind') {
       return valid.where((a) {
@@ -231,19 +591,26 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
 
   void _zoomIn() {
     final currentZoom = _mapController.camera.zoom;
-    _mapController.move(_mapController.camera.center, (currentZoom + 1).clamp(3.0, 18.0));
+    _mapController.move(
+      _mapController.camera.center,
+      (currentZoom + 1).clamp(3.0, 18.0),
+    );
   }
 
   void _zoomOut() {
     final currentZoom = _mapController.camera.zoom;
-    _mapController.move(_mapController.camera.center, (currentZoom - 1).clamp(3.0, 18.0));
+    _mapController.move(
+      _mapController.camera.center,
+      (currentZoom - 1).clamp(3.0, 18.0),
+    );
   }
 
   Color _getHazardColor(WeatherAlert alert) {
     final t = alert.title.toLowerCase();
     if (t.contains('flood')) return const Color(0xFF0284C7);
     if (t.contains('rain')) return const Color(0xFF3B82F6);
-    if (t.contains('storm') || t.contains('lightning')) return const Color(0xFF8B5CF6);
+    if (t.contains('storm') || t.contains('lightning'))
+      return const Color(0xFF8B5CF6);
     if (t.contains('heat')) return const Color(0xFFEA580C);
     if (t.contains('wind')) return const Color(0xFF10B981);
     return const Color(0xFF7C3AED);
@@ -263,7 +630,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
     final displayAlerts = _filteredAlerts;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF3F2F8),
+      backgroundColor: isDark
+          ? AppColors.darkBackground
+          : const Color(0xFFF3F2F8),
       body: Stack(
         children: [
           // 1. Rock-Solid, High-Res Basemap (Zero "Zoom Level Not Supported" errors)
@@ -279,15 +648,38 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
               ),
             ),
             children: [
-              // Clean Standard OpenStreetMap / Carto Basemap Tiles
+              // High-Performance Basemap Tiles (Carto CDN / Esri Satellite)
               TileLayer(
-                urlTemplate: isDark
-                    ? 'https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png'
-                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: _getMapUrlTemplate(isDark),
+                subdomains: _mapStyle == WeatherMapStyle.satellite
+                    ? const []
+                    : const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.weathergpt.app',
                 maxZoom: 19,
                 maxNativeZoom: 18,
+                keepBuffer: 4,
+                tileProvider: NetworkTileProvider(),
               ),
+
+              // Real-Time Doppler Rain Radar Overlay (RainViewer)
+              if (_showRainRadar &&
+                  _radarData != null &&
+                  _radarData!.frames.isNotEmpty)
+                TileLayer(
+                  urlTemplate: _radarData!
+                      .frames[_currentRadarFrameIndex.clamp(
+                        0,
+                        _radarData!.frames.length - 1,
+                      )]
+                      .getTileUrlTemplate(host: _radarData!.host),
+                  userAgentPackageName: 'com.weathergpt.app',
+                  maxZoom: 18,
+                  maxNativeZoom: 12,
+                  tileProvider: NetworkTileProvider(),
+                  tileBuilder: (context, tileWidget, tile) {
+                    return Opacity(opacity: 0.72, child: tileWidget);
+                  },
+                ),
 
               // Markers: Google Maps-Style Blue Location Puck & Active Hazard Badges
               MarkerLayer(
@@ -311,7 +703,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                                 height: 28 + (pulse * 36),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF4285F4).withValues(alpha: 0.22 * (1.0 - pulse)),
+                                  color: const Color(
+                                    0xFF4285F4,
+                                  ).withValues(alpha: 0.22 * (1.0 - pulse)),
                                 ),
                               ),
                               // Soft Middle Aura
@@ -320,7 +714,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                                 height: 28,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF4285F4).withValues(alpha: 0.3),
+                                  color: const Color(
+                                    0xFF4285F4,
+                                  ).withValues(alpha: 0.3),
                                 ),
                               ),
                               // Core Google Maps Solid Blue Beacon
@@ -330,7 +726,10 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: const Color(0xFF1A73E8),
-                                  border: Border.all(color: Colors.white, width: 3),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
                                   boxShadow: const [
                                     BoxShadow(
                                       color: Color(0x661A73E8),
@@ -348,48 +747,59 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                   ),
 
                   // Real Active Weather Hazard Pins (Only shown when genuine warnings exist)
-                  ...displayAlerts.where((a) => a.latitude != 0.0 && a.longitude != 0.0).map((alert) {
-                    final markerColor = _getHazardColor(alert);
-                    final iconName = _getHazardIcon(alert);
-                    final isSelected = _selectedAlert?.id == alert.id;
+                  ...displayAlerts
+                      .where((a) => a.latitude != 0.0 && a.longitude != 0.0)
+                      .map((alert) {
+                        final markerColor = _getHazardColor(alert);
+                        final iconName = _getHazardIcon(alert);
+                        final isSelected = _selectedAlert?.id == alert.id;
 
-                    return Marker(
-                      point: LatLng(alert.latitude, alert.longitude),
-                      width: isSelected ? 50 : 40,
-                      height: isSelected ? 50 : 40,
-                      child: IosBouncingButton(
-                        onTap: () {
-                          setState(() => _selectedAlert = alert);
-                          _mapController.move(LatLng(alert.latitude, alert.longitude), 13.0);
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isDark ? AppColors.darkSurfaceElevated : Colors.white,
-                            border: Border.all(
-                              color: isSelected ? markerColor : markerColor.withValues(alpha: 0.8),
-                              width: isSelected ? 2.5 : 1.8,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: markerColor.withValues(alpha: isSelected ? 0.5 : 0.25),
-                                blurRadius: isSelected ? 12 : 6,
-                                offset: const Offset(0, 3),
+                        return Marker(
+                          point: LatLng(alert.latitude, alert.longitude),
+                          width: isSelected ? 50 : 40,
+                          height: isSelected ? 50 : 40,
+                          child: IosBouncingButton(
+                            onTap: () {
+                              setState(() => _selectedAlert = alert);
+                              _mapController.move(
+                                LatLng(alert.latitude, alert.longitude),
+                                13.0,
+                              );
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark
+                                    ? AppColors.darkSurfaceElevated
+                                    : Colors.white,
+                                border: Border.all(
+                                  color: isSelected
+                                      ? markerColor
+                                      : markerColor.withValues(alpha: 0.8),
+                                  width: isSelected ? 2.5 : 1.8,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: markerColor.withValues(
+                                      alpha: isSelected ? 0.5 : 0.25,
+                                    ),
+                                    blurRadius: isSelected ? 12 : 6,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: Center(
-                            child: IosSvgIcon(
-                              iconName,
-                              size: isSelected ? 20 : 16,
-                              color: markerColor,
+                              child: Center(
+                                child: IosSvgIcon(
+                                  iconName,
+                                  size: isSelected ? 20 : 16,
+                                  color: markerColor,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    );
-                  }),
+                        );
+                      }),
                 ],
               ),
             ],
@@ -415,10 +825,14 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                             height: 42,
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
-                              color: isDark ? AppColors.darkSurface : Colors.white,
+                              color: isDark
+                                  ? AppColors.darkSurface
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+                                color: isDark
+                                    ? AppColors.darkCardBorder
+                                    : const Color(0xFFECEAF3),
                               ),
                               boxShadow: [
                                 BoxShadow(
@@ -429,7 +843,10 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                               ],
                             ),
                             child: const Center(
-                              child: Icon(Icons.arrow_back_ios_new_rounded, size: 16),
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -437,12 +854,19 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                       // Location Title Pill with Live Status Beacon
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurface.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.95),
+                            color: isDark
+                                ? AppColors.darkSurface.withValues(alpha: 0.95)
+                                : Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(22),
                             border: Border.all(
-                              color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+                              color: isDark
+                                  ? AppColors.darkCardBorder
+                                  : const Color(0xFFECEAF3),
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -460,10 +884,16 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                                 height: 8,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: _isLoadingGps ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                  color: _isLoadingGps
+                                      ? const Color(0xFFF59E0B)
+                                      : const Color(0xFF10B981),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: (_isLoadingGps ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withValues(alpha: 0.5),
+                                      color:
+                                          (_isLoadingGps
+                                                  ? const Color(0xFFF59E0B)
+                                                  : const Color(0xFF10B981))
+                                              .withValues(alpha: 0.5),
                                       blurRadius: 6,
                                     ),
                                   ],
@@ -477,7 +907,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                                    color: isDark
+                                        ? AppColors.darkTextPrimary
+                                        : const Color(0xFF111114),
                                   ),
                                 ),
                               ),
@@ -506,10 +938,14 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurface : Colors.white,
+                            color: isDark
+                                ? AppColors.darkSurface
+                                : Colors.white,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+                              color: isDark
+                                  ? AppColors.darkCardBorder
+                                  : const Color(0xFFECEAF3),
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -554,48 +990,214 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
             ),
           ),
 
-          // 3. Right Side Floating Zoom Controls
+          // 3. Right Side Floating Map Controls (Layers, Zoom, Recenter)
           Positioned(
             right: 16,
             top: 135,
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3),
+            child: Column(
+              children: [
+                // Map Layers Switcher Button (Streets / Satellite / Dark / Doppler)
+                IosBouncingButton(
+                  onTap: () => _showMapLayersModal(context, isDark),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark
+                            ? AppColors.darkCardBorder
+                            : const Color(0xFFECEAF3),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.layers_rounded,
+                        size: 22,
+                        color: Color(0xFF1A73E8),
+                      ),
+                    ),
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
+                const SizedBox(height: 10),
+
+                // Zoom In & Zoom Out Pill
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkSurface : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkCardBorder
+                          : const Color(0xFFECEAF3),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  IosBouncingButton(
-                    onTap: _zoomIn,
-                    child: const SizedBox(
-                      width: 42,
-                      height: 40,
-                      child: Icon(Icons.add_rounded, size: 20),
+                  child: Column(
+                    children: [
+                      IosBouncingButton(
+                        onTap: _zoomIn,
+                        child: const SizedBox(
+                          width: 44,
+                          height: 42,
+                          child: Icon(Icons.add_rounded, size: 20),
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? AppColors.darkCardBorder
+                            : const Color(0xFFECEAF3),
+                      ),
+                      IosBouncingButton(
+                        onTap: _zoomOut,
+                        child: const SizedBox(
+                          width: 44,
+                          height: 42,
+                          child: Icon(Icons.remove_rounded, size: 20),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Recenter to User GPS Location Button
+                IosBouncingButton(
+                  onTap: _recenterToUser,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark
+                            ? AppColors.darkCardBorder
+                            : const Color(0xFFECEAF3),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.my_location_rounded,
+                        size: 20,
+                        color: Color(0xFF10B981),
+                      ),
                     ),
                   ),
-                  Divider(height: 1, color: isDark ? AppColors.darkCardBorder : const Color(0xFFECEAF3)),
-                  IosBouncingButton(
-                    onTap: _zoomOut,
-                    child: const SizedBox(
-                      width: 42,
-                      height: 40,
-                      child: Icon(Icons.remove_rounded, size: 20),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+
+          // 4. Live Doppler Radar Timeline Bar (When Radar is enabled)
+          if (_showRainRadar &&
+              _radarData != null &&
+              _radarData!.frames.isNotEmpty)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: _isTelemetryExpanded ? 315 : 210,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkSurface.withValues(alpha: 0.95)
+                      : Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isDark
+                        ? AppColors.darkCardBorder
+                        : const Color(0xFFE5E2EE),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IosBouncingButton(
+                      onTap: _toggleRadarPlay,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF0284C7),
+                        ),
+                        child: Icon(
+                          _isPlayingRadar
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Rain Radar: ${_radarData!.frames[_currentRadarFrameIndex.clamp(0, _radarData!.frames.length - 1)].label}',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF111114),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'LIVE DOPPLER',
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: const Color(0xFF10B981),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // 4. Bottom Floating Precision Weather & Alerts HUD
           Positioned(
@@ -642,7 +1244,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface.withValues(alpha: 0.96) : Colors.white.withValues(alpha: 0.96),
+        color: isDark
+            ? AppColors.darkSurface.withValues(alpha: 0.96)
+            : Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark ? AppColors.darkCardBorder : const Color(0xFFE5E2EE),
@@ -671,7 +1275,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                 ),
                 child: Center(
                   child: IosSvgIcon(
-                    rainMm > 0 ? 'cloud_rain' : (weatherCode == 0 ? 'sun' : 'cloud'),
+                    rainMm > 0
+                        ? 'cloud_rain'
+                        : (weatherCode == 0 ? 'sun' : 'cloud'),
                     size: 24,
                     color: const Color(0xFF1A73E8),
                   ),
@@ -689,15 +1295,22 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : const Color(0xFF111114),
                             letterSpacing: -0.5,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -716,7 +1329,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                       'Feels like ${feelsLike.round()}°C • Cloud Cover $cloudCover%',
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: isDark ? AppColors.darkTextSecondary : const Color(0xFF6B7280),
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : const Color(0xFF6B7280),
                       ),
                     ),
                   ],
@@ -724,16 +1339,22 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
               ),
               // Expand / Collapse Toggle
               IosBouncingButton(
-                onTap: () => setState(() => _isTelemetryExpanded = !_isTelemetryExpanded),
+                onTap: () => setState(
+                  () => _isTelemetryExpanded = !_isTelemetryExpanded,
+                ),
                 child: Container(
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF232030) : const Color(0xFFF3F2F8),
+                    color: isDark
+                        ? const Color(0xFF232030)
+                        : const Color(0xFFF3F2F8),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _isTelemetryExpanded ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
+                    _isTelemetryExpanded
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_up_rounded,
                     size: 20,
                     color: const Color(0xFF6B7280),
                   ),
@@ -750,7 +1371,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                 Expanded(
                   child: _buildMetricTile(
                     label: 'Precipitation',
-                    value: rainMm > 0 ? '${rainMm.toStringAsFixed(1)} mm/h' : '${rainProb.round()}% prob',
+                    value: rainMm > 0
+                        ? '${rainMm.toStringAsFixed(1)} mm/h'
+                        : '${rainProb.round()}% prob',
                     icon: Icons.water_drop_rounded,
                     color: const Color(0xFF3B82F6),
                     isDark: isDark,
@@ -784,7 +1407,8 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                 Expanded(
                   child: _buildMetricTile(
                     label: 'Pressure / Visibility',
-                    value: '${pressure.round()} hPa • ${visibilityKm.toStringAsFixed(1)} km',
+                    value:
+                        '${pressure.round()} hPa • ${visibilityKm.toStringAsFixed(1)} km',
                     icon: Icons.speed_rounded,
                     color: const Color(0xFFF59E0B),
                     isDark: isDark,
@@ -828,14 +1452,18 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                   style: GoogleFonts.inter(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : const Color(0xFF111114),
                   ),
                 ),
                 Text(
                   label,
                   style: GoogleFonts.inter(
                     fontSize: 9.5,
-                    color: isDark ? AppColors.darkTextTertiary : const Color(0xFF8E8E93),
+                    color: isDark
+                        ? AppColors.darkTextTertiary
+                        : const Color(0xFF8E8E93),
                   ),
                 ),
               ],
@@ -885,7 +1513,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected
                 ? Colors.white
-                : (isDark ? AppColors.darkTextPrimary : const Color(0xFF1F2937)),
+                : (isDark
+                      ? AppColors.darkTextPrimary
+                      : const Color(0xFF1F2937)),
           ),
         ),
       ),
@@ -920,7 +1550,11 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: IosSvgIcon(_getHazardIcon(alert), size: 16, color: color),
+                child: IosSvgIcon(
+                  _getHazardIcon(alert),
+                  size: 16,
+                  color: color,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -929,14 +1563,20 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextPrimary : const Color(0xFF111114),
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : const Color(0xFF111114),
                   ),
                 ),
               ),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF9CA3AF)),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: Color(0xFF9CA3AF),
+                ),
                 onPressed: () => setState(() => _selectedAlert = null),
               ),
             ],
@@ -946,7 +1586,9 @@ class _RadarMapScreenState extends State<RadarMapScreen> with SingleTickerProvid
             alert.description,
             style: GoogleFonts.inter(
               fontSize: 12.5,
-              color: isDark ? AppColors.darkTextSecondary : const Color(0xFF4B5563),
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : const Color(0xFF4B5563),
               height: 1.35,
             ),
           ),
