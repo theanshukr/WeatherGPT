@@ -9,8 +9,9 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 try:
+    db_url = settings.DATABASE_URL.strip() if settings.DATABASE_URL else ""
     engine = create_async_engine(
-        settings.DATABASE_URL,
+        db_url,
         echo=settings.DEBUG,
         future=True,
         pool_pre_ping=True,
