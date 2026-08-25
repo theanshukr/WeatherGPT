@@ -24,6 +24,8 @@ frontend/build/
 !frontend.zip
 *.tar.gz
 *.rar
+!app-release/
+!app-release/*.apk
 
 # Dependencies
 node_modules/

@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/weathergpt"
 
     # Supabase Cloud
-    SUPABASE_URL: str = "https://psupzmalbgplbqfctpzg.supabase.co"
-    SUPABASE_KEY: Optional[str] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzdXB6bWFsYmdwbGJxZmN0cHpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0OTY0OTAsImV4cCI6MjEwMzA3MjQ5MH0.3A6cbj-yM7GK6ngTZK5FNkTuod8Nnwwjyh_G9jTx6ik"
+    SUPABASE_URL: str = "https://your-supabase-project.supabase.co"
+    SUPABASE_KEY: Optional[str] = None
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
