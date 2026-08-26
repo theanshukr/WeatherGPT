@@ -263,7 +263,7 @@ flutter run
 | Variable Key | Required | Default Value | Description |
 |---|---|---|---|
 | `PROJECT_NAME` | No | `"WeatherGPT Backend"` | Application Name |
-| `DATABASE_URL` | Yes | `postgresql+asyncpg://...` | Async PostgreSQL connection URI |
+| `DATABASE_URL` | Yes | `.` | Async PostgreSQL connection URI |
 | `REDIS_URL` | Yes | `redis://localhost:6379/0` | Redis caching connection string |
 | `DEFAULT_LLM_PROVIDER` | No | `"gemini"` | Active LLM engine (`gemini` or `sarvam`) |
 | `GEMINI_API_KEY` | Optional | `""` | Google Gemini AI API key |
