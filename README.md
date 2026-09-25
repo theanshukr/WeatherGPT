@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🌤️ WeatherGPT
-
+ 
 ### **Mobile-First Conversational AI Weather Assistant & Hyperlocal Intelligence Platform**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
